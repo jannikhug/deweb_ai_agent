@@ -82,22 +82,8 @@ async function executeToolCalls(toolCalls) {
 // Gesprächsverlauf-Speicher
 let conversation = [];
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-};
-
-const JSON_HEADERS = {
-  ...CORS_HEADERS,
-  "Content-Type": "application/json",
-};
-
 function jsonResponse(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: JSON_HEADERS,
-  });
+  return Response.json(data, { status });
 }
 
 // Händler des API-Endpunktes für Chat
@@ -196,53 +182,40 @@ function handleResetChat() {
   return jsonResponse({ success: true });
 }
 
-// Händler für Options Anfrage (CORS-Preflight-Requests vom Browser.)
-function handleOptions() {
-  return new Response(null, { headers: CORS_HEADERS });
-}
-
 // Händler, wenn kein API-Endpunkt gefunden wurde
 function handleNotFound() {
   return jsonResponse({ error: "Not Found" }, 404);
+}
+
+// Händler für statische Dateien aus dem Client-Verzeichnis
+async function handleStaticFiles(req) {
+  const url = new URL(req.url);
+
+  // Statische Datei auflösen (/ -> index.html)
+  const fileName = url.pathname === "/" ? "/index.html" : url.pathname;
+  const filePath = path.resolve(CLIENT_DIR, "." + fileName);
+
+  // Path-Traversal-Schutz: Pfad muss innerhalb CLIENT_DIR bleiben
+  if (!filePath.startsWith(CLIENT_DIR)) {
+    return jsonResponse({ error: "Forbidden" }, 403);
+  }
+
+  const file = Bun.file(filePath);
+  if (await file.exists()) return new Response(file);
+
+  return new Response("404 – Not Found", { status: 404, headers: { "Content-Type": "text/html" } });
 }
 
 // Bun-Server starten
 Bun.serve({
   port: APP_SERVER_PORT,
   routes: {
-    "/api/chat": {
-      OPTIONS: handleOptions,
-      POST: handleChat,
-    },
-    "/api/chat/reset": {
-      OPTIONS: handleOptions,
-      POST: handleResetChat,
-    },
+    "/api/chat": { POST: handleChat },
+    "/api/chat/reset": { POST: handleResetChat },
+    "/api/*": handleNotFound,
+    "/*": { GET: handleStaticFiles },
   },
-  // Fallback: Statische Dateien aus dem Client-Verzeichnis ausliefern
-  async fetch(req) {
-    const url = new URL(req.url);
-
-    // CORS-Preflight für unbekannte Pfade
-    if (req.method === "OPTIONS") return handleOptions();
-
-    // API-Pfade, die nicht in routes definiert sind -> 404
-    if (url.pathname.startsWith("/api/")) return handleNotFound();
-
-    // Statische Datei auflösen (/ -> index.html)
-    const fileName = url.pathname === "/" ? "/index.html" : url.pathname;
-    const filePath = path.resolve(CLIENT_DIR, "." + fileName);
-
-    // Path-Traversal-Schutz: Pfad muss innerhalb CLIENT_DIR bleiben
-    if (!filePath.startsWith(CLIENT_DIR)) {
-      return jsonResponse({ error: "Forbidden" }, 403);
-    }
-
-    const file = Bun.file(filePath);
-    if (await file.exists()) return new Response(file);
-
-    return handleNotFound();
-  },
+  fetch: () => handleNotFound(),
 });
 
 // Bestätigung in der Konsole ausgeben
