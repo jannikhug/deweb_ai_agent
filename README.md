@@ -8,7 +8,7 @@ https://di-wiki.ch/di/ba25/deweb/project/ai-agent-with-5-tools
 ```
 cd deinProjektordner
 git clone https://gitlab.switch.ch/hslu/edu/bachelor-in-digital-ideation/modul-deweb-f26/p05-ai-agent-with-5-tools.git
-cd p05-ai-agent-with-4-tools
+cd p05-ai-agent-with-5-tools
 ```
 
 ## Erstelle .env-Datei
