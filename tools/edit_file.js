@@ -1,5 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import { assertNotBlocked } from "./blocklist.js";
 
 /**
  * Zählt die Vorkommen eines Teilstrings in einem String.
@@ -33,6 +34,8 @@ async function createNewFile(filePath, content) {
 
 async function execute(input) {
   const { path: filePath, old_str: oldStr, new_str: newStr } = input;
+
+  assertNotBlocked(filePath);
 
   if (!filePath || oldStr === newStr) {
     throw new Error("invalid input parameters");

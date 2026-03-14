@@ -1,5 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import { isBlockedFile } from "./blocklist.js";
 
 /**
  * Durchläuft ein Verzeichnis rekursiv und gibt alle Dateien zurück.
@@ -36,7 +37,8 @@ async function walkDirectory(dir, baseDir = dir) {
 
 async function execute(input) {
   const dir = input.path || ".";
-  const files = await walkDirectory(dir);
+  const allFiles = await walkDirectory(dir);
+  const files = allFiles.filter((f) => f.endsWith("/") || !isBlockedFile(f));
   return JSON.stringify(files);
 }
 

@@ -1,3 +1,5 @@
+import { isBlockedFile } from "./blocklist.js";
+
 /**
  * Code-Search-Tool – Durchsucht den Code mit ripgrep (rg).
  * Exportiert im OpenAI-Function-Calling-Format, sodass keine Konvertierung nötig ist.
@@ -51,9 +53,21 @@ async function execute(input) {
     let result = stdout.trim();
     const lines = result.split("\n");
 
+    // Filter out results from blocklisted files
+    const filteredLines = lines.filter((line) => {
+      const filePath = line.split(":")[0];
+      return !isBlockedFile(filePath);
+    });
+
+    if (filteredLines.length === 0) {
+      return "No matches found";
+    }
+
+    result = filteredLines.join("\n");
+
     // Limit output to prevent overwhelming responses
-    if (lines.length > 50) {
-      result = lines.slice(0, 50).join("\n") + `\n... (showing first 50 of ${lines.length} matches)`;
+    if (filteredLines.length > 50) {
+      result = filteredLines.slice(0, 50).join("\n") + `\n... (showing first 50 of ${filteredLines.length} matches)`;
     }
 
     return result;

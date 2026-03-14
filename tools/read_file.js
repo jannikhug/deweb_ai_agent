@@ -1,4 +1,5 @@
 import * as fs from "fs/promises";
+import { assertNotBlocked } from "./blocklist.js";
 
 /**
  * Read-File-Tool – Gibt den Inhalt einer Datei zurück.
@@ -6,6 +7,7 @@ import * as fs from "fs/promises";
  */
 
 async function execute(input) {
+  assertNotBlocked(input.path);
   const content = await fs.readFile(input.path, "utf-8");
   return content;
 }
