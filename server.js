@@ -230,7 +230,7 @@ Bun.serve({
     if (url.pathname.startsWith("/api/")) return handleNotFound();
 
     // Statische Datei auflösen (/ -> index.html)
-    const fileName = url.pathname === "/" ? "index.html" : url.pathname;
+    const fileName = url.pathname === "/" ? "/index.html" : url.pathname;
     const filePath = path.resolve(CLIENT_DIR, "." + fileName);
 
     // Path-Traversal-Schutz: Pfad muss innerhalb CLIENT_DIR bleiben
