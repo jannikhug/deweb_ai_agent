@@ -3,9 +3,15 @@
  * Exportiert im OpenAI-Function-Calling-Format, sodass keine Konvertierung nötig ist.
  */
 
+const isWindows = process.platform === "win32";
+
 async function execute(input) {
   try {
-    const proc = Bun.spawn(["bash", "-c", input.command], {
+    const shellArgs = isWindows
+      ? ["cmd", "/c", input.command]
+      : ["bash", "-c", input.command];
+
+    const proc = Bun.spawn(shellArgs, {
       stdout: "pipe",
       stderr: "pipe",
     });
