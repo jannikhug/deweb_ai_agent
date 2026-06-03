@@ -72,8 +72,22 @@ async function execute(input) {
           imageContent,
           {
             type: "text",
-            text:
-              "Erkenne alle Türen und Fenster im Grundriss. Gib JSON zurück mit doors:[{room,wall,position_hint,width_m,confidence}], windows:[{room,wall,position_hint,width_m,confidence}], circulation_notes.",
+            text: `Das Bild zeigt den Grundriss eines einzelnen Raumes. Erkenne alle Öffnungen dieses Raumes anhand dieser Konventionen:
+
+TÜREN: Erkennbar an einem Viertelkreis-Bogen (Türschwung) mit einer geraden Linie (Türblatt). Varianten: Doppeltür (zwei Bögen), Schiebetür (Rechtecke ohne Bogen), Drehtür.
+
+FENSTER: Erkennbar als Unterbrechung einer Aussenwand mit zwei oder drei parallelen Linien innerhalb der Wandstärke (Fensterrahmen + Verglasung). Fenster sitzen fast immer in Aussenwänden.
+
+${input.room_context ? `Bereits erkannte Raumdaten (nutze diese um Aussen- und Innenwände korrekt zuzuordnen): ${input.room_context}` : ""}
+
+Gib JSON zurück mit:
+- doors: [{room, wall, position_hint, width_m, visual_cue, confidence}]
+- windows: [{room, wall, position_hint, width_m, visual_cue, confidence}]
+- uncertain: [{type_guess, room, wall, position_hint, reason}]
+- circulation_notes
+
+wall: Himmelsrichtung (N/S/E/W) oder "interior" bei Innenwänden.
+visual_cue: Beschreibe kurz was du gesehen hast, z.B. "Bogen mit Türblatt", "drei parallele Linien in Aussenwand".`,
           },
         ],
       },
@@ -93,6 +107,7 @@ export default {
       properties: {
         image_url: { type: "string" },
         image_path: { type: "string" },
+        room_context: { type: "string", description: "JSON-String der erkannten Raumdimensionen aus detect_room_dimensions" },
       },
     },
   },

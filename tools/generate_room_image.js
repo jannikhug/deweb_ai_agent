@@ -29,7 +29,7 @@ async function execute(input) {
     model: "gpt-image-1.5",
     prompt,
     n: variants,
-    size: input.size || "1024x1024",
+    size: "1024x1024",
     quality: "medium",
   });
 
@@ -85,12 +85,6 @@ export default {
           type: "string",
           description:
             "Detaillierte Beschreibung des Raumes: Raumtyp, Stil (modern, skandinavisch, etc.), Möbel, Farben, Materialien, Beleuchtung und Atmosphäre.",
-        },
-        size: {
-          type: "string",
-          enum: ["1024x1024", "1792x1024", "1024x1792"],
-          description:
-            "Bildgrösse. Standard: 1024x1024. Für Panorama: 1792x1024. Für Hochformat: 1024x1792.",
         },
         variants: {
           type: "integer",

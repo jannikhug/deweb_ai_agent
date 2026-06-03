@@ -38,13 +38,13 @@ body {
     font-size: 5.8rem;
     width: 100%;
     text-align: center;
-    opacity: .3;
+    opacity: .8;
 }
 
 #output {
     width: min(920px, calc(100% - 20px));
     height: fit-content;
-    max-height: 70vh;
+    max-height: calc(100vh - 272px);
     margin: 0 auto;
     padding: 22px;
     border-radius: 26px;
@@ -101,9 +101,9 @@ body {
 }
 
 .palette-chip {
-    width: 16px;
-    height: 16px;
-    border-radius: 4px;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
     border: 1px solid rgba(255, 255, 255, 0.55);
 }
 
@@ -221,7 +221,7 @@ body {
     left: -14px;
     right: -14px;
     bottom: 44px;
-    height: 176px;
+    height: 230px;
     z-index: 0;
 }
 
@@ -272,6 +272,16 @@ body {
     transform: translate(-50%, -162px) scale(1);
 }
 
+.action-fan:hover .action-fan-item:nth-child(4),
+.action-fan:focus-within .action-fan-item:nth-child(4) {
+    transform: translate(-50%, -216px) scale(1);
+}
+
+.action-fan-item.is-playing {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+
 @media (max-width: 700px) {
     body {
         padding: 20px 10px 150px;
@@ -313,7 +323,7 @@ body {
         left: -12px;
         right: -12px;
         bottom: 40px;
-        height: 152px;
+        height: 198px;
     }
 
     .action-fan:hover .action-fan-item:nth-child(1),
@@ -330,9 +340,62 @@ body {
     .action-fan:focus-within .action-fan-item:nth-child(3) {
         transform: translate(-50%, -140px) scale(1);
     }
+
+    .action-fan:hover .action-fan-item:nth-child(4),
+    .action-fan:focus-within .action-fan-item:nth-child(4) {
+        transform: translate(-50%, -186px) scale(1);
+    }
 }
 
 
+
+.image-gallery {
+    display: none;
+    position: fixed;
+    top: 140px;
+    right: calc(50% + min(460px, (100% - 20px) / 2) + 12px);
+    width: 280px;
+    max-height: calc(100vh - 180px);
+    padding: 16px;
+    border-radius: 26px;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.07));
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    box-shadow: 0 28px 60px rgba(3, 8, 20, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.36);
+    z-index: 15;
+    overflow-y: auto;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.image-gallery.is-visible {
+    display: flex;
+}
+
+.image-gallery::-webkit-scrollbar {
+    display: none;
+}
+
+.image-gallery-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.image-gallery-list img {
+    width: 100%;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.32);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    display: block;
+}
+
+.image-gallery-empty {
+    font-size: 0.9rem;
+    opacity: 0.7;
+    text-align: center;
+    padding: 8px 0;
+}
 
 .material-icons {
   font-family: 'Material Icons';

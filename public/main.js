@@ -9,6 +9,14 @@ const input = document.querySelector("#input");
 const resetButton = document.querySelector("#reset-button");
 const floorPlanInput = document.querySelector("#upload-floor-plan-input");
 const floorPlanPreview = document.querySelector("#floor-plan-preview");
+const openImagesButton = document.querySelector("#open-images-button");
+const imageGallery = document.querySelector("#image-gallery");
+const imageGalleryList = document.querySelector("#image-gallery-list");
+const musicToggleButton = document.querySelector("#music-toggle-button");
+
+const backgroundMusic = new Audio("/assets/sounds/BackgroundSound.mp3");
+backgroundMusic.loop = true;
+backgroundMusic.volume = 0.4;
 
 const LOADER_HTML = '<div class="loader-container is-visible"><span class="loader" aria-label="Laden"></span></div>';
 
@@ -19,11 +27,65 @@ let cameraPreference = "";
 form.addEventListener("submit", submitUserPrompt);
 resetButton.addEventListener("click", resetConversation);
 floorPlanInput?.addEventListener("change", handleFloorPlanUpload);
+openImagesButton?.addEventListener("click", toggleImageGallery);
+musicToggleButton?.addEventListener("click", toggleBackgroundMusic);
 
 const commands = {
   "/reset": resetConversation,
   "/new": resetConversation,
 };
+
+function toggleBackgroundMusic() {
+  const icon = musicToggleButton?.querySelector(".material-icons");
+  if (backgroundMusic.paused) {
+    backgroundMusic.play();
+    musicToggleButton?.classList.add("is-playing");
+    if (icon) icon.textContent = "music_off";
+  } else {
+    backgroundMusic.pause();
+    musicToggleButton?.classList.remove("is-playing");
+    if (icon) icon.textContent = "music_note";
+  }
+}
+
+async function toggleImageGallery() {
+  if (!imageGallery) return;
+
+  if (imageGallery.classList.contains("is-visible")) {
+    imageGallery.classList.remove("is-visible");
+    return;
+  }
+
+  imageGalleryList.innerHTML = "";
+  imageGallery.classList.add("is-visible");
+
+  try {
+    const response = await fetch("/api/images");
+    const data = await response.json();
+    const images = Array.isArray(data.images) ? data.images : [];
+
+    if (images.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "image-gallery-empty";
+      empty.textContent = "Noch keine Bilder generiert.";
+      imageGalleryList.appendChild(empty);
+      return;
+    }
+
+    for (const src of images) {
+      const img = document.createElement("img");
+      img.src = src;
+      img.alt = "Generiertes Raumdesign";
+      img.loading = "lazy";
+      imageGalleryList.appendChild(img);
+    }
+  } catch {
+    const empty = document.createElement("p");
+    empty.className = "image-gallery-empty";
+    empty.textContent = "Bilder konnten nicht geladen werden.";
+    imageGalleryList.appendChild(empty);
+  }
+}
 
 function displayError(error, fallback = "Unbekannter Fehler") {
   let message = fallback;
@@ -55,11 +117,6 @@ function renderPalettes(palettes = []) {
   for (const palette of palettes) {
     const row = document.createElement("div");
     row.className = "palette-row";
-
-    const title = document.createElement("p");
-    title.className = "palette-title";
-    title.textContent = isSinglePalette ? "Farbpalette" : `Variante ${palette.variant || "?"} Farben`;
-    row.appendChild(title);
 
     const chips = document.createElement("div");
     chips.className = "palette-chips";
@@ -119,6 +176,9 @@ async function handleFloorPlanUpload(event) {
 
 function renderOutput(text, images = [], palettes = []) {
   output.innerHTML = "";
+
+  const receiveSound = new Audio("/assets/sounds/ReceiveSound.wav");
+  receiveSound.play();
 
   const textNode = document.createElement("p");
   textNode.textContent = text || "";
@@ -197,13 +257,16 @@ async function submitUserPrompt(event) {
   try {
     event.preventDefault();
 
+    const sendSound = new Audio("/assets/sounds/SendSound.wav");
+    sendSound.play();
+
     const prompt = input.value;
     if (await slashCommand(prompt)) return;
 
     if (uploadedFloorPlanDataUrl && !cameraPreference) {
       const askedCamera = window.prompt(
-        "Wo soll die Kamera stehen? Beispiel: In der Ecke beim Eingang, Blick Richtung Fenster.",
-        "In einer Raumecke auf Augenhöhe, Blick diagonal in den Raum.",
+        "Wo soll die Kamera basierend auf dem Grundriss stehen?",
+        "Auf eigenhöhe in der unteren rechten Ecke mit Blick in die Mitte des Raumes",
       );
       cameraPreference = (askedCamera || "").trim();
     }

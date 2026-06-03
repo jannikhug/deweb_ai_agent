@@ -19,19 +19,43 @@ const openai = new OpenAI({
   baseURL: BASE_URL,
 });
 
+const PROMPT_TEXT = (floorPlanSummary, userIntent) =>
+  `Du planst eine Kameraperspektive für eine fotorealistische Innenraumvisualisierung eines einzelnen Raumes.
+
+Grundriss-Info (Dimensionen + Öffnungen): ${floorPlanSummary || ""}
+Nutzerwunsch: ${userIntent || ""}
+
+Regeln für eine gute Kameraperspektive:
+- Kamera steht nahe einer Wand oder in einer Ecke (gibt Tiefenwirkung)
+- Kamera schaut NICHT direkt in ein Fenster (Gegenlicht vermeiden)
+- Hauptfenster oder Sichtachse soll seitlich oder schräg im Bild sein
+- Augenhöhe: 1.4–1.6 m, für Überblick auch 1.8–2.0 m möglich
+
+Gib JSON zurück:
+{
+  near_wall: "Wand nahe der Kamera (N/S/E/W)",
+  looking_toward: "Blickrichtung der Kamera (N/S/E/W oder Kombi z.B. NE)",
+  camera_height_m: Zahl,
+  visible_walls: ["Liste der sichtbaren Wände z.B. N, E"],
+  focal_point: "Was ist der Blickpunkt? z.B. Fenster an Nordwand, Kamin",
+  lens_hint: "Objektiv-Empfehlung z.B. Weitwinkel 24mm",
+  dalle_description: "Fertige englische Beschreibung der Kameraposition für DALL-E, z.B.: Camera placed in the southwest corner at eye level (1.5m), looking diagonally toward the northeast wall, north wall with window visible on the left, east wall on the right."
+}`;
+
 async function execute(input) {
+  const promptText = PROMPT_TEXT(input.floor_plan_summary, input.user_intent);
+
+  const messageContent = input.image_url
+    ? [
+        { type: "image_url", image_url: { url: input.image_url } },
+        { type: "text", text: promptText },
+      ]
+    : promptText;
+
   const response = await openai.chat.completions.create({
     model: MODEL,
     response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "user",
-        content:
-          `Plane eine kamerataugliche Perspektive für eine Innenraumvisualisierung. Nutzerwunsch: ${input.user_intent || ""}. ` +
-          `Grundriss-Info: ${input.floor_plan_summary || ""}. ` +
-          "Gib JSON zurück: {camera_position, camera_height_m, viewing_direction, lens_hint, composition_notes}.",
-      },
-    ],
+    messages: [{ role: "user", content: messageContent }],
   });
 
   return response.choices[0]?.message?.content || "{}";
@@ -47,6 +71,7 @@ export default {
       properties: {
         user_intent: { type: "string" },
         floor_plan_summary: { type: "string" },
+        image_url: { type: "string", description: "Optionales Grundrissbild als data:image/... oder https:// URL" },
       },
     },
   },

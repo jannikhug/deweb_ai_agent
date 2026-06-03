@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>Mein AI-Coding-Agent mit 5 Tools (p05)</title>
         <link rel="stylesheet" href="style.css" />
-        <link rel="stylesheet" href="assets/gradientBG.css" />
+        <link rel="stylesheet" href="assets/styles/gradientBG.css" />
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
@@ -34,9 +34,14 @@
                             <img id="floor-plan-preview" class="floor-plan-preview" alt="Grundriss Vorschau" />
                         </label>
                         <button class="action-button action-fan-item" id="open-images-button" type="button" aria-label="Fotos anzeigen"><span class="material-icons">photo_library</span></button>
+                        <button class="action-button action-fan-item" id="music-toggle-button" type="button" aria-label="Musik ein/aus"><span class="material-icons">music_note</span></button>
                     </div>
                 </div>
             </div>
+        </div>
+
+        <div id="image-gallery" class="image-gallery" aria-label="Generierte Bilder">
+            <div id="image-gallery-list" class="image-gallery-list"></div>
         </div>
 
         <div class="noise"></div>
