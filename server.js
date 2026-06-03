@@ -2,22 +2,10 @@ import OpenAI from "openai";
 import path from "path";
 import * as fs from "fs/promises";
 import { tools } from "./tools/index.js";
-import { runFloorPlanPipeline, resolveImageForPalette, getToolByName } from "./pipeline.js";
+import { runFloorPlanPipeline, resolveImageForPalette, getToolByName, parseJsonSafe } from "./pipeline.js";
 
-function parseJsonSafe(raw, fallback = {}) {
-  try {
-    return JSON.parse(String(raw || "{}"));
-  } catch {
-    return fallback;
-  }
-}
-
-// Pfad zum Client-Verzeichnis (relativ zur Server-Datei)
 const CLIENT_DIR = path.resolve(import.meta.dir, "public");
 
-console.log("🚀 Starte Interior Designer Server...");
-
-// Konfiguration: GitHub Copilot API-Endpunkt und Fallbackmodell
 const GITHUB_COPILOT_KEY = process.env.GITHUB_COPILOT_KEY || "";
 const GITHUB_COPILOT_MODEL = process.env.GITHUB_COPILOT_MODEL || "gpt-4o";
 const GITHUB_COPILOT_BASE_URL = "https://api.githubcopilot.com";
@@ -26,10 +14,13 @@ if (!GITHUB_COPILOT_KEY) {
   throw new Error("GITHUB_COPILOT_KEY is not set");
 }
 
-// Konfiguration: App-Server-Port
+const openai = new OpenAI({
+  apiKey: GITHUB_COPILOT_KEY,
+  baseURL: GITHUB_COPILOT_BASE_URL,
+});
+
 const APP_SERVER_PORT = 3000;
 
-// System-Prompt für den AI-Assistenten
 const SYSTEM_PROMPT = `Du bist ein professioneller KI-Innenarchitekt. Du hilfst Nutzern dabei, Räume zu visualisieren, einzurichten und zu gestalten. Antworte präzise, freundlich und praxisnah (Sprache: de-ch, Du Form).
 
 ## Deine Tools
@@ -58,72 +49,12 @@ const SYSTEM_PROMPT = `Du bist ein professioneller KI-Innenarchitekt. Du hilfst 
 - Gib nach einer Bildgenerierung immer eine kurze Einschätzung des Ergebnisses ab.
 - Erfinde keine Grundriss-Geometrie - halte dich strikt an erkannte Dimensionen und Öffnungen.`;
 
-const openai = new OpenAI({
-  apiKey: GITHUB_COPILOT_KEY,
-  baseURL: GITHUB_COPILOT_BASE_URL,
-});
+let conversation = [];
 
-/**
- * Extrahiert Inhalt und tool_calls aus allen Choices einer Antwort.
- * Manche Modelle (z.B. Claude via Copilot) verteilen Text und tool_calls
- * auf separate Choices, anstatt sie in einem einzigen choices[0] zusammenzufassen.
- */
-function extractAssistantMessage(responseJSON) {
-  console.log("Raw model response:", JSON.stringify(responseJSON).substring(0, 500) + "...");
-  const choices = responseJSON.choices || [];
-  let content = "";
-  let toolCalls = [];
 
-  for (const choice of choices) {
-    const msg = choice.message;
-    if (!msg) continue;
-    if (msg.content) {
-      content += (content ? "\n" : "") + msg.content;
-    }
-    if (msg.tool_calls?.length > 0) {
-      toolCalls.push(...msg.tool_calls);
-    }
-  }
-
-  return { content, toolCalls };
-}
-
-function extractImagesFromToolResults(toolResults) {
-  const images = [];
-
-  for (const result of toolResults) {
-    const content = String(result?.content || "");
-
-    try {
-      const parsed = JSON.parse(content);
-      if (!parsed || typeof parsed !== "object") continue;
-
-      const parsedImages = Array.isArray(parsed.images) ? parsed.images : [];
-      for (const image of parsedImages) {
-        if (!image || typeof image !== "object") continue;
-        const dataUrl = typeof image.dataUrl === "string" ? image.dataUrl : undefined;
-        const url = typeof image.url === "string" ? image.url : undefined;
-        if (!dataUrl && !url) continue;
-        images.push({ dataUrl, url });
-      }
-    } catch {
-      // Tool-Result ist kein JSON, wird ignoriert.
-    }
-  }
-
-  // Deduplizieren über die effektive Source
-  const seen = new Set();
-  return images.filter((img) => {
-    const key = img.dataUrl || img.url;
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-/**
- * Führt die vom Modell zurückgegebenen Tool-Calls aus und gibt die Ergebnis-Nachrichten zurück.
- */
+/* ------------------------------------------------------------------------------------
+    TOOLS AUSFÜHREN
+    ------------------------------------------------------------------------------------ */
 async function executeToolCalls(toolCalls) {
   const results = [];
   for (const toolCall of toolCalls) {
@@ -151,16 +82,71 @@ async function executeToolCalls(toolCalls) {
   return results;
 }
 
-// Gesprächsverlauf-Speicher
-let conversation = [];
 
+/* ------------------------------------------------------------------------------------
+    EXTRAKTIONS- UND AUSFÜHRUNGSFUNKTIONEN
+    ------------------------------------------------------------------------------------ */
+function extractAssistantMessage(responseJSON) {
+  const choices = responseJSON.choices || [];
+  let content = "";
+  let toolCalls = [];
+
+  for (const choice of choices) {
+    const msg = choice.message;
+    if (!msg) continue;
+    if (msg.content) {
+      content += (content ? "\n" : "") + msg.content;
+    }
+    if (msg.tool_calls?.length > 0) {
+      toolCalls.push(...msg.tool_calls);
+    }
+  }
+
+  return { content, toolCalls };
+}
+
+function extractImagesFromToolResults(toolResults) {
+  const images = [];
+
+  for (const result of toolResults) {
+    const content = String(result?.content || "");
+
+    const parsed = parseJsonSafe(content, null);
+    if (!parsed || typeof parsed !== "object") continue;
+
+    const parsedImages = Array.isArray(parsed.images) ? parsed.images : [];
+    for (const image of parsedImages) {
+      if (!image || typeof image !== "object") continue;
+      const dataUrl = typeof image.dataUrl === "string" ? image.dataUrl : undefined;
+      const url = typeof image.url === "string" ? image.url : undefined;
+      if (!dataUrl && !url) continue;
+      images.push({ dataUrl, url });
+    }
+  }
+
+  // Deduplizieren über die effektive Source
+  const seen = new Set();
+  return images.filter((img) => {
+    const key = img.dataUrl || img.url;
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+
+/* ------------------------------------------------------------------------------------
+    JSON-HILFSFUNKTIONEN
+    ------------------------------------------------------------------------------------ */
 function jsonResponse(data, status = 200) {
   return Response.json(data, { status });
 }
 
-// Händler des API-Endpunktes für Chat
+
+/* ------------------------------------------------------------------------------------
+    API ENDPUNKTE
+    ------------------------------------------------------------------------------------ */
 async function handleChat(req) {
-  // Eingabe validieren
   let body;
   try {
     body = await req.json();
@@ -220,11 +206,9 @@ async function handleChat(req) {
     }
   }
 
-  // Nachrichten aufbauen
   conversation.push({ role: "user", content: userMessage });
   const messagesWithSystem = [{ role: "system", content: SYSTEM_PROMPT }, ...conversation];
 
-  // Provider aufrufen (mit Tool-Call-Loop)
   let responseJSON;
   let lastToolResults = [];
   try {
@@ -235,24 +219,19 @@ async function handleChat(req) {
       stream: false,
     });
 
-    // Tool-Call-Schleife: Modell so lange aufrufen, bis es keine Tools mehr anfordert
     let extracted = extractAssistantMessage(responseJSON);
 
     while (extracted.toolCalls.length > 0) {
-      // Assistenten-Nachricht mit tool_calls zum Gesprächsverlauf hinzufügen
       conversation.push({
         role: "assistant",
         content: extracted.content || "",
         tool_calls: extracted.toolCalls,
       });
 
-      // Alle Tool-Calls ausführen und Ergebnisse sammeln
       const toolResults = await executeToolCalls(extracted.toolCalls);
       lastToolResults = toolResults;
       conversation.push(...toolResults);
 
-
-      // Nachrichten mit System-Prompt neu aufbauen und erneut aufrufen
       const updatedMessages = [{ role: "system", content: SYSTEM_PROMPT }, ...conversation];
       responseJSON = await openai.chat.completions.create({
         model: GITHUB_COPILOT_MODEL,
@@ -275,12 +254,10 @@ async function handleChat(req) {
     );
   }
 
-  // Erfolgsantwort aufbauen – merge content from all choices for the client
   const finalMessage = extractAssistantMessage(responseJSON);
   const images = extractImagesFromToolResults(lastToolResults);
   const normalizedContent = finalMessage.content || "";
 
-  // Farbpaletten für alle generierten Bilder automatisch extrahieren
   const palettes = [];
   const extractPaletteTool = getToolByName("extract_image_palette");
   if (extractPaletteTool && images.length > 0) {
@@ -328,13 +305,11 @@ async function handleChat(req) {
   });
 }
 
-// Händler des API-Endpunktes um Chat zu löschen
 function handleResetChat() {
   conversation = [];
   return jsonResponse({ success: true });
 }
 
-// Händler für Bildliste aus dem generated-Ordner
 async function handleListImages() {
   const generatedDir = path.resolve(CLIENT_DIR, "generated");
   try {
@@ -350,16 +325,8 @@ async function handleListImages() {
   }
 }
 
-// Händler, wenn kein API-Endpunkt gefunden wurde
-function handleNotFound() {
-  return jsonResponse({ error: "Not Found" }, 404);
-}
-
-// Händler für statische Dateien aus dem Client-Verzeichnis
 async function handleStaticFiles(req) {
   const url = new URL(req.url);
-
-  // Statische Datei auflösen (/ -> index.html)
   const fileName = url.pathname === "/" ? "/index.html" : url.pathname;
   const filePath = path.resolve(CLIENT_DIR, "." + fileName);
 
@@ -374,7 +341,13 @@ async function handleStaticFiles(req) {
   return new Response("404 – Not Found", { status: 404, headers: { "Content-Type": "text/html" } });
 }
 
-// Bun-Server starten
+function handleNotFound() {
+  return jsonResponse({ error: "Not Found" }, 404);
+}
+
+/* ------------------------------------------------------------------------------------
+    SERVER-ROUTES UND START
+    ------------------------------------------------------------------------------------ */
 Bun.serve({
   port: APP_SERVER_PORT,
   routes: {
@@ -387,6 +360,5 @@ Bun.serve({
   fetch: () => handleNotFound(),
 });
 
-// Bestätigung in der Konsole ausgeben
 console.log(`Server running at http://localhost:${APP_SERVER_PORT}`);
 console.log(`Using Github-Copilot at ${GITHUB_COPILOT_BASE_URL} with model ${GITHUB_COPILOT_MODEL}`);

@@ -16,7 +16,7 @@ export function getToolByName(name) {
   return tools.find((t) => t.function.name === name);
 }
 
-function parseJsonSafe(raw, fallback = {}) {
+export function parseJsonSafe(raw, fallback = {}) {
   try {
     return JSON.parse(String(raw || "{}"));
   } catch {
@@ -44,9 +44,7 @@ export async function resolveImageForPalette(image) {
 
 export async function runFloorPlanPipeline({ userMessage, floorPlanImageDataUrl, floorPlanFileName, cameraPreference }) {
   console.log("\n=== FLOOR PLAN PIPELINE START ===");
-  console.log("Input:", { userMessage: userMessage?.substring(0, 50) + "..." || "N/A", floorPlanFileName, cameraPreference });
 
-  // 1. Tool-Verfügbarkeit prüfen
   console.log("\n[STEP 1] Prüfe Tool-Verfügbarkeit...");
   const detectRoomDimensionsTool = getToolByName("detect_room_dimensions");
   const detectOpeningsTool = getToolByName("detect_openings");
@@ -65,27 +63,22 @@ export async function runFloorPlanPipeline({ userMessage, floorPlanImageDataUrl,
 
   if (missingTools.length > 0) {
     const msg = `Benötigte Tools fehlen: ${missingTools.join(", ")}`;
-    console.log("❌ " + msg);
     throw new Error(msg);
   }
   console.log("✓ Alle Tools verfügbar");
 
-  // 2. Raumdimensionen erkennen
   console.log("\n[STEP 2] Erkenne Raumdimensionen...");
   let roomDimensionsRaw, roomDimensions;
   try {
     roomDimensionsRaw = await detectRoomDimensionsTool.execute({
       image_url: floorPlanImageDataUrl,
     });
-    console.log("✓ Rohe Antwort erhalten:", roomDimensionsRaw?.substring(0, 100) + "...");
     roomDimensions = parseJsonSafe(roomDimensionsRaw, { rooms: [] });
-    console.log("✓ Geparst:", JSON.stringify(roomDimensions).substring(0, 100) + "...");
+    console.log("✓ Raumdimensionen erkannt");
   } catch (err) {
-    console.log("❌ detect_room_dimensions fehlgeschlagen:", err.message);
     throw new Error(`detect_room_dimensions: ${err.message}`);
   }
 
-  // 3. Öffnungen erkennen
   console.log("\n[STEP 3] Erkenne Öffnungen (Türen/Fenster)...");
   let openingsRaw, openings;
   try {
@@ -93,15 +86,12 @@ export async function runFloorPlanPipeline({ userMessage, floorPlanImageDataUrl,
       image_url: floorPlanImageDataUrl,
       room_context: JSON.stringify(roomDimensions),
     });
-    console.log("✓ Rohe Antwort erhalten:", openingsRaw?.substring(0, 100) + "...");
     openings = parseJsonSafe(openingsRaw, { doors: [], windows: [] });
-    console.log("✓ Geparst:", JSON.stringify(openings).substring(0, 100) + "...");
+    console.log("✓ Öffnungen erkannt");
   } catch (err) {
-    console.log("❌ detect_openings fehlgeschlagen:", err.message);
     throw new Error(`detect_openings: ${err.message}`);
   }
 
-  // 4. Kameraposition planen
   console.log("\n[STEP 4] Plane Kameraposition...");
   let cameraPlanRaw, cameraPlan;
   try {
@@ -114,15 +104,12 @@ export async function runFloorPlanPipeline({ userMessage, floorPlanImageDataUrl,
       floor_plan_summary: floorPlanSummary,
       image_url: floorPlanImageDataUrl,
     });
-    console.log("✓ Rohe Antwort erhalten:", cameraPlanRaw?.substring(0, 100) + "...");
     cameraPlan = parseJsonSafe(cameraPlanRaw, { camera_position: cameraPreference || "" });
-    console.log("✓ Geparst:", JSON.stringify(cameraPlan).substring(0, 100) + "...");
+    console.log("✓ Kameraposition geplant");
   } catch (err) {
-    console.log("❌ camera_view_planner fehlgeschlagen:", err.message);
     throw new Error(`camera_view_planner: ${err.message}`);
   }
 
-  // 5. Layout-Constraints prüfen
   console.log("\n[STEP 5] Prüfe Layout-Constraints...");
   let constraintsRaw, constraints;
   try {
@@ -132,15 +119,12 @@ export async function runFloorPlanPipeline({ userMessage, floorPlanImageDataUrl,
       camera_plan: JSON.stringify(cameraPlan),
       user_intent: userMessage,
     });
-    console.log("✓ Rohe Antwort erhalten:", constraintsRaw?.substring(0, 100) + "...");
     constraints = parseJsonSafe(constraintsRaw, { hard_constraints: [], soft_constraints: [] });
-    console.log("✓ Geparst:", JSON.stringify(constraints).substring(0, 100) + "...");
+    console.log("✓ Layout-Constraints geprüft");
   } catch (err) {
-    console.log("❌ layout_constraint_checker fehlgeschlagen:", err.message);
     throw new Error(`layout_constraint_checker: ${err.message}`);
   }
 
-  // 6. Bilder generieren
   console.log("\n[STEP 6] Generiere 1 Bilder-Variante...");
   let generationRaw, parsedGeneration, images;
   try {
@@ -168,7 +152,6 @@ export async function runFloorPlanPipeline({ userMessage, floorPlanImageDataUrl,
       size: "1024x1024",
       variants: 1,
     });
-    console.log("✓ Rohe Antwort erhalten:", generationRaw?.substring(0, 100) + "...");
     parsedGeneration = parseJsonSafe(generationRaw, { text: String(generationRaw || ""), images: [] });
     images = Array.isArray(parsedGeneration.images) ? parsedGeneration.images : [];
     console.log(`✓ ${images.length} Bild(er) generiert`);
@@ -177,21 +160,17 @@ export async function runFloorPlanPipeline({ userMessage, floorPlanImageDataUrl,
     throw new Error(`generate_room_image: ${err.message}`);
   }
 
-  // 7. Paletten extrahieren
   console.log("\n[STEP 7] Extrahiere Farb-Paletten...");
   const palettes = [];
   try {
     for (let i = 0; i < images.length; i++) {
-      console.log(`  [PALETTE ${i + 1}] Resolving image...`);
       const imageSource = await resolveImageForPalette(images[i]);
       if (!imageSource) {
         console.warn(`  ⚠ Konnte Bild ${i + 1} nicht auflösen, überspringe Palette`);
         continue;
       }
-      console.log(`  [PALETTE ${i + 1}] Image resolved, extracting palette...`);
 
       const paletteRaw = await extractImagePaletteTool.execute({ image_url: imageSource });
-      console.log(`  [PALETTE ${i + 1}] Rohe Antwort:`, paletteRaw?.substring(0, 100) + "...");
       const paletteParsed = parseJsonSafe(paletteRaw, { colors: [] });
       const colors = Array.isArray(paletteParsed.colors)
         ? paletteParsed.colors
