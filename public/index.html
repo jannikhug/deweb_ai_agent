@@ -1,17 +1,67 @@
 <!doctype html>
 <html lang="de">
     <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>Mein AI-Coding-Agent mit 5 Tools (p05)</title>
         <link rel="stylesheet" href="style.css" />
+        <link rel="stylesheet" href="assets/gradientBG.css" />
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
         <script src="main.js" defer></script>
     </head>
+
     <body>
-        <h1>Mein AI-Coding-Agent</h1>
-        <div id="output">Hallo, wie kann ich dir helfen?</div>
-        <form id="form">
-            <input id="input" type="text" placeholder="Message..." />
-            <button id="submit-button" type="submit">⏎</button>
-        </form>
-        <button id="reset-button">Reset</button>
+
+        <div class="content-container">
+            <div id="output">Frage mich etwas, lass mich ein Raum gestalten oder bitte mich um Inspiration! Auch kannst du ein Blueprint eines Raums hochladen, 
+                welcher ich dann einrichten werde.
+            </div>
+            <div class="form-shell">
+                <form id="form">
+                    <input id="input" type="text" placeholder="Nachricht..." />
+                    <button class="submit-button" type="submit" aria-label="Send"><span class="material-icons">send</span></button>
+                </form>
+                <div class="action-fan" aria-label="Weitere Aktionen">
+                    <button class="action-button action-fan-trigger" type="button" aria-label="Open actions"><span class="material-icons">more_horiz</span></button>
+                    <div class="action-fan-items">
+                        <button class="action-button action-fan-item" id="reset-button" type="button" aria-label="Reset"><span class="material-icons">refresh</span></button>
+                        <label class="action-button action-fan-item file-upload-button" aria-label="Upload">
+                            <span class="material-icons">file_upload</span>
+                            <input id="upload-floor-plan-input" class="upload-input" type="file" accept="image/png,image/jpeg,image/webp" />
+                            <img id="floor-plan-preview" class="floor-plan-preview" alt="Grundriss Vorschau" />
+                        </label>
+                        <button class="action-button action-fan-item" id="open-images-button" type="button" aria-label="Fotos anzeigen"><span class="material-icons">photo_library</span></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="noise"></div>
+
+        <h1 class="title">INTERIOR DESIGNER</h1>
+
+        <div class="gradient-bg">
+            <svg xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <filter id="goo">
+                        <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" />
+                        <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -8" result="goo" />
+                        <feBlend in="SourceGraphic" in2="goo" />
+                    </filter>
+                </defs>
+            </svg>
+            <div class="gradients-container">
+                <div class="g1"></div>
+                <div class="g2"></div>
+                <div class="g3"></div>
+                <div class="g4"></div>
+                <div class="g5"></div>
+                <div class="interactive"></div>
+            </div>
+        </div>
+
     </body>
 </html>
