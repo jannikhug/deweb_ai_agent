@@ -24,6 +24,7 @@ const PROMPT_TEXT = (floorPlanSummary, userIntent) =>
 
 Grundriss-Info (Dimensionen + Öffnungen): ${floorPlanSummary || ""}
 Nutzerwunsch: ${userIntent || ""}
+Orientierung: Oben im Grundriss = Norden, Unten = Süden, Links = Westen, Rechts = Osten.
 
 Regeln für eine gute Kameraperspektive:
 - Kamera steht nahe einer Wand oder in einer Ecke (gibt Tiefenwirkung)

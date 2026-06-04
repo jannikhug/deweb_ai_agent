@@ -72,13 +72,24 @@ async function execute(input) {
           imageContent,
           {
             type: "text",
-            text: `Das Bild zeigt den Grundriss eines einzelnen Raumes. Erkenne alle Öffnungen dieses Raumes anhand dieser Konventionen:
+            text: `Das Bild zeigt den Grundriss eines einzelnen Raumes. Erkenne alle Öffnungen dieses Raumes.
 
-TÜREN: Erkennbar an einem Viertelkreis-Bogen (Türschwung) mit einer geraden Linie (Türblatt). Varianten: Doppeltür (zwei Bögen), Schiebetür (Rechtecke ohne Bogen), Drehtür.
+ORIENTIERUNG (immer gültig, sofern kein Nordpfeil abweicht):
+Oben im Bild = Norden (N), Unten = Süden (S), Links = Westen (W), Rechts = Osten (E).
+Verwende diese Orientierung für alle wall-Angaben.
 
-FENSTER: Erkennbar als Unterbrechung einer Aussenwand mit zwei oder drei parallelen Linien innerhalb der Wandstärke (Fensterrahmen + Verglasung). Fenster sitzen fast immer in Aussenwänden.
+TÜREN: Erkennbar an einem Viertelkreis-Bogen (Türschwung) mit einer geraden Linie (Türblatt). Varianten: Doppeltür (zwei Bögen), Schiebetür (Rechtecke ohne Bogen), Drehtür (Bogen ohne gerade Linie).
+
+FENSTER: Scanne aktiv jede Aussenwand auf Fenster. Fenster können sich zeigen als:
+- Zwei oder drei parallele Linien innerhalb einer Wandunterbrechung
+- Eine dünne durchgezogene Linie die eine Wand unterbricht (vereinfachter Stil)
+- Ein Rechteck oder Doppelstrich in der Wandfläche
+- Jede Unterbrechung einer Aussenwand, die keine Tür ist
+Wenn du unsicher bist ob es ein Fenster ist: lieber als uncertain eintragen als ignorieren.
 
 ${input.room_context ? `Bereits erkannte Raumdaten (nutze diese um Aussen- und Innenwände korrekt zuzuordnen): ${input.room_context}` : ""}
+
+Gehe jede der vier Wände (N, S, W, E) einzeln durch und prüfe ob sich dort eine Öffnung befindet, bevor du antwortest.
 
 Gib JSON zurück mit:
 - doors: [{room, wall, position_hint, width_m, visual_cue, confidence}]
@@ -87,7 +98,7 @@ Gib JSON zurück mit:
 - circulation_notes
 
 wall: Himmelsrichtung (N/S/E/W) oder "interior" bei Innenwänden.
-visual_cue: Beschreibe kurz was du gesehen hast, z.B. "Bogen mit Türblatt", "drei parallele Linien in Aussenwand".`,
+visual_cue: Beschreibe kurz was du gesehen hast, z.B. "Bogen mit Türblatt oben im Bild", "Wandunterbrechung mit dünner Linie an der rechten Seite".`,
           },
         ],
       },

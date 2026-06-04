@@ -81,7 +81,8 @@ Rufe die Tools einzeln nacheinander auf - der Output jedes Tools ist Input für 
 - Fordere keine unnötigen Informationen an. Wenn genug Kontext vorhanden ist, handle sofort.
 - Bei Visualisierungen: Beschreibe kurz, was du generierst, bevor du das Tool aufrufst.
 - Gib nach einer Bildgenerierung immer eine kurze Einschätzung des Ergebnisses ab.
-- Erfinde keine Grundriss-Geometrie - halte dich strikt an erkannte Dimensionen und Öffnungen.`;
+- Erfinde keine Grundriss-Geometrie - halte dich strikt an erkannte Dimensionen und Öffnungen.
+- Füge NIEMALS Bild-URLs, Markdown-Bild-Links (![...](...)) oder Dateinamen von generierten Bildern in deinen Text ein. Bilder werden automatisch vom Frontend angezeigt.`;
 
 let conversation = [];
 

@@ -73,7 +73,7 @@ async function execute(input) {
           {
             type: "text",
             text:
-              "Das Bild zeigt den Grundriss eines einzelnen Raumes. Extrahiere präzise Dimensionen und Proportionen nur dieses einen Raumes. Gib JSON zurück mit: rooms:[{name,width_m,depth_m,area_m2,confidence}], total_area_m2, ceiling_height_estimate_m, scale_notes. Erfinde keine zusätzlichen Räume – es gibt nur einen.",
+              "Das Bild zeigt den Grundriss eines einzelnen Raumes. Orientierung: Oben = Norden, Unten = Süden, Links = Westen, Rechts = Osten. Extrahiere präzise Dimensionen und Proportionen nur dieses einen Raumes. Gib JSON zurück mit: rooms:[{name,width_m,depth_m,area_m2,confidence}], total_area_m2, ceiling_height_estimate_m, scale_notes. Erfinde keine zusätzlichen Räume – es gibt nur einen.",
           },
         ],
       },
