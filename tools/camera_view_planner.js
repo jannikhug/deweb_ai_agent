@@ -39,7 +39,7 @@ Gib JSON zurück:
   visible_walls: ["Liste der sichtbaren Wände z.B. N, E"],
   focal_point: "Was ist der Blickpunkt? z.B. Fenster an Nordwand, Kamin",
   lens_hint: "Objektiv-Empfehlung z.B. Weitwinkel 24mm",
-  dalle_description: "Fertige englische Beschreibung der Kameraposition für DALL-E, z.B.: Camera placed in the southwest corner at eye level (1.5m), looking diagonally toward the northeast wall, north wall with window visible on the left, east wall on the right."
+  dalle_description: "Fertige englische Beschreibung der Kameraposition für GPT Image 1.5, z.B.: Camera placed in the southwest corner at eye level (1.5m), looking diagonally toward the northeast wall, north wall with window visible on the left, east wall on the right."
 }`;
 
 async function execute(input) {

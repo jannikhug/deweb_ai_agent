@@ -4,7 +4,7 @@ import * as path from "path";
 
 /**
  * Generate-Room-Image-Tool – Generiert eine fotorealistische Raumvisualisierung
- * basierend auf einer Raumbeschreibung mittels DALL-E.
+ * basierend auf einer Raumbeschreibung mittels GPT Image.
  * Exportiert im OpenAI-Function-Calling-Format, sodass keine Konvertierung nötig ist.
  */
 
@@ -77,7 +77,7 @@ export default {
   function: {
     name: "generate_room_image",
     description:
-      "Generiert eine fotorealistische Raumvisualisierung (Innenarchitektur) mit DALL-E basierend auf einer Beschreibung. Gibt eine Bild-URL zurück, die der Nutzer im Browser betrachten kann.",
+      "Generiert eine fotorealistische Raumvisualisierung (Innenarchitektur) mit GPT Image basierend auf einer Beschreibung. Gibt eine Bild-URL zurück, die der Nutzer im Browser betrachten kann.",
     parameters: {
       type: "object",
       properties: {

@@ -31,13 +31,13 @@ async function execute(input) {
 Gib JSON zurück mit:
 {
   "style_name": "Name des Stils auf Deutsch (z.B. Skandinavisch, Industriell, Modern, Mediterran, Japandi)",
-  "style_keywords": ["englische", "Stil-Keywords", "für", "DALL-E"],
+  "style_keywords": ["englische", "Stil-Keywords", "für", "GPT Image 1.5"],
   "colors": ["dominante Farben als Hex-Werte"],
   "materials": ["erkannte Materialien z.B. Eichenholz, Beton, Leinen, Marmor"],
   "furniture_characteristics": "kurze Beschreibung der Möbelform und -qualität",
   "lighting": "Beschreibung der Beleuchtungssituation (natürlich/künstlich, warm/kalt, diffus/direkt)",
   "atmosphere": "Stimmung und Atmosphäre des Raumes in 1-2 Sätzen",
-  "dalle_description": "Vollständige englische Beschreibung für DALL-E, 2-3 Sätze. Beschreibe Stil, Materialien, Farben, Licht und Atmosphäre präzise, sodass DALL-E einen ähnlichen Raum generieren kann."
+  "dalle_description": "Vollständige englische Beschreibung für GPT Image 1.5, 2-3 Sätze. Beschreibe Stil, Materialien, Farben, Licht und Atmosphäre präzise, sodass GPT Image 1.5 einen ähnlichen Raum generieren kann."
 }`,
           },
         ],
@@ -53,7 +53,7 @@ export default {
   function: {
     name: "style_analyzer",
     description:
-      "Analysiert ein Raumfoto und extrahiert Stil, Materialien, Farben und eine DALL-E-taugliche Stilbeschreibung. Nur für echte Raumfotos verwenden, nicht für Grundrisse.",
+      "Analysiert ein Raumfoto und extrahiert Stil, Materialien, Farben und eine GPT Image 1.5-taugliche Stilbeschreibung. Nur für echte Raumfotos verwenden, nicht für Grundrisse.",
     parameters: {
       type: "object",
       properties: {

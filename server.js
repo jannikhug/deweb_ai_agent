@@ -2,9 +2,21 @@ import OpenAI from "openai";
 import path from "path";
 import * as fs from "fs/promises";
 import { tools } from "./tools/index.js";
-import { classifyImage, resolveImageForPalette, getToolByName, parseJsonSafe } from "./pipeline.js";
 
 const CLIENT_DIR = path.resolve(import.meta.dir, "public");
+
+const MIME_BY_EXT = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+};
+
+const _VISION_API_KEY = process.env.OPENAI_API_KEY || process.env.GITHUB_COPILOT_KEY;
+const _VISION_BASE_URL = process.env.OPENAI_API_KEY ? "https://api.openai.com/v1" : "https://api.githubcopilot.com";
+const _VISION_MODEL = process.env.OPENAI_IMAGE_MODEL || process.env.GITHUB_COPILOT_MODEL || "gpt-4o";
+const _visionClient = new OpenAI({ apiKey: _VISION_API_KEY, baseURL: _VISION_BASE_URL });
 
 const GITHUB_COPILOT_KEY = process.env.GITHUB_COPILOT_KEY || "";
 const GITHUB_COPILOT_MODEL = process.env.GITHUB_COPILOT_MODEL || "gpt-4o";
@@ -29,8 +41,8 @@ const SYSTEM_PROMPT = `Du bist ein professioneller KI-Innenarchitekt. Du hilfst 
 - **detect_openings** - Erkennt Türen und Fenster aus einem Grundrissbild.
 - **camera_view_planner** - Plant eine geeignete Kameraperspektive für die Visualisierung.
 - **layout_constraint_checker** - Leitet Möblierungs-Regeln aus Raumdaten ab (z.B. «Sofa nicht vor die Tür»).
-- **style_analyzer** - Analysiert ein Raumfoto und extrahiert Stil, Materialien, Farben und eine DALL-E-Beschreibung.
-- **generate_room_image** - Generiert eine fotorealistische Raumvisualisierung mit DALL-E.
+- **style_analyzer** - Analysiert ein Raumfoto und extrahiert Stil, Materialien, Farben und eine GPT Image 1.5-Beschreibung.
+- **generate_room_image** - Generiert eine fotorealistische Raumvisualisierung mit GPT Image 1.5.
 - **extract_image_palette** - Extrahiert die Farbpalette aus einem generierten Bild.
 
 ## Wann du welches Tool einsetzt
@@ -75,7 +87,7 @@ let conversation = [];
 
 
 /* ------------------------------------------------------------------------------------
-    TOOLS AUSFÜHREN
+    TOOLS-FUNKTIONEN
     ------------------------------------------------------------------------------------ */
 async function executeToolCalls(toolCalls, { uploadedImageDataUrl = "" } = {}) {
   const results = [];
@@ -111,8 +123,13 @@ async function executeToolCalls(toolCalls, { uploadedImageDataUrl = "" } = {}) {
 }
 
 
+function getToolByName(name) {
+  return tools.find((t) => t.function.name === name);
+}
+
+
 /* ------------------------------------------------------------------------------------
-    EXTRAKTIONS- UND AUSFÜHRUNGSFUNKTIONEN
+    EXTRAKTIONSFUNKTIONEN FÜR TOOL-RESULTS
     ------------------------------------------------------------------------------------ */
 function extractAssistantMessage(responseJSON) {
   const choices = responseJSON.choices || [];
@@ -179,10 +196,63 @@ function extractPalettesFromToolResults(toolResults) {
 
 
 /* ------------------------------------------------------------------------------------
+    BILD-FUNKTIONEN
+    ------------------------------------------------------------------------------------ */
+async function classifyImage(imageDataUrl) {
+  const response = await _visionClient.chat.completions.create({
+    model: _VISION_MODEL,
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "image_url", image_url: { url: imageDataUrl } },
+          {
+            type: "text",
+            text: 'Klassifiziere dieses Bild: Ist es ein Grundriss (technische Zeichnung von oben, Wandlinien) oder ein Raumfoto (echtes/fotorealistisches Bild eines Raumes)? Gib JSON zurück: {"type": "floor_plan" | "room_photo", "confidence": 0.0-1.0}',
+          },
+        ],
+      },
+    ],
+  });
+  const raw = response.choices[0]?.message?.content || "{}";
+  const result = parseJsonSafe(raw, { type: "floor_plan", confidence: 0.5 });
+  console.log(`[classifyImage] type=${result.type} confidence=${result.confidence}`);
+  return result;
+}
+
+async function resolveImageForPalette(image) {
+  if (image?.dataUrl) return image.dataUrl;
+  if (!image?.url) return "";
+
+  if (image.url.startsWith("data:image/")) return image.url;
+  if (image.url.startsWith("https://")) return image.url;
+
+  if (image.url.startsWith("/generated/")) {
+    const filePath = path.resolve(CLIENT_DIR, "." + image.url);
+    const ext = path.extname(filePath).toLowerCase();
+    const mime = MIME_BY_EXT[ext] || "image/png";
+    const buffer = await fs.readFile(filePath);
+    return `data:${mime};base64,${buffer.toString("base64")}`;
+  }
+
+  return "";
+}
+
+
+/* ------------------------------------------------------------------------------------
     JSON-HILFSFUNKTIONEN
     ------------------------------------------------------------------------------------ */
 function jsonResponse(data, status = 200) {
   return Response.json(data, { status });
+}
+
+function parseJsonSafe(raw, fallback = {}) {
+  try {
+    return JSON.parse(String(raw || "{}"));
+  } catch {
+    return fallback;
+  }
 }
 
 
