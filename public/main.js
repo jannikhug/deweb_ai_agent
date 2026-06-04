@@ -1,8 +1,6 @@
-// Konfiguration: Server-API-Endpunkte (relativ, da Client und Server auf demselben Origin laufen)
 const API_CHAT = "/api/chat";
 const API_CHAT_RESET = "/api/chat/reset";
 
-// DOM-Elemente für das Formular und die Ausgabe anbinden
 const form = document.querySelector("form");
 const output = document.querySelector("#output");
 const input = document.querySelector("#input");
@@ -14,20 +12,17 @@ const imageGallery = document.querySelector("#image-gallery");
 const imageGalleryList = document.querySelector("#image-gallery-list");
 const musicToggleButton = document.querySelector("#music-toggle-button");
 
-// Hintergrundmusik initialisieren
 const backgroundMusic = new Audio("/assets/sounds/BackgroundSound.mp3");
 backgroundMusic.loop = true;
 backgroundMusic.volume = 0.4;
 
-// HTML für den Ladeindikator
-const LOADER_HTML = '<div class="loader-container is-visible"><span class="loader" aria-label="Laden"></span></div>';
+const WELCOME_MESSAGE = "Frage mich etwas, lass mich einen Raum gestalten oder bitte mich um Inspiration! Du kannst auch einen Grundriss oder ein Raumfoto hochladen.";
 
-// Variablen für den hochgeladenen Grundriss und die Kamerapräferenz
-let uploadedFloorPlanDataUrl = "";
-let uploadedFloorPlanName = "";
-let cameraPreference = "";
+// { role: "user"|"assistant", content: string, images?: [], palettes?: [], error?: bool }
+let chatHistory = [];
+let uploadedImageDataUrl = "";
+let uploadedImageName = "";
 
-// Event-Listeners
 form.addEventListener("submit", submitUserPrompt);
 resetButton.addEventListener("click", resetConversation);
 floorPlanInput?.addEventListener("change", handleFloorPlanUpload);
@@ -39,9 +34,82 @@ const commands = {
   "/new": resetConversation,
 };
 
+renderAllMessages();
+
 
 /* ------------------------------------------------------------------------------------
-    INPUT, OUTPUT 
+    CHAT RENDERING
+    ------------------------------------------------------------------------------------ */
+function renderAllMessages() {
+  output.innerHTML = "";
+
+  if (chatHistory.length === 0) {
+    output.appendChild(createMessageElement({ role: "assistant", content: WELCOME_MESSAGE }));
+    return;
+  }
+
+  for (const entry of chatHistory) {
+    output.appendChild(createMessageElement(entry));
+  }
+
+  output.scrollTop = output.scrollHeight;
+}
+
+function createMessageElement({ role, content, images = [], palettes = [], error = false }) {
+  const wrapper = document.createElement("div");
+  wrapper.className = `message message--${role === "user" ? "user" : "assistant"}`;
+  if (error) wrapper.classList.add("message--error");
+
+  const bubble = document.createElement("div");
+  bubble.className = "message-bubble";
+  bubble.textContent = content;
+  wrapper.appendChild(bubble);
+
+  if (role === "assistant") {
+    for (const image of images) {
+      const src = image?.dataUrl || image?.url;
+      if (!src) continue;
+      const img = document.createElement("img");
+      img.src = src;
+      img.alt = "Generiertes Raumdesign";
+      img.loading = "lazy";
+      img.className = "message-image";
+      wrapper.appendChild(img);
+    }
+
+    if (palettes.length > 0) {
+      wrapper.appendChild(createPaletteElement(palettes));
+    }
+  }
+
+  return wrapper;
+}
+
+function createPaletteElement(palettes) {
+  const wrap = document.createElement("div");
+  wrap.className = "palette-wrap";
+
+  for (const palette of palettes) {
+    const colors = Array.isArray(palette.colors) ? palette.colors : [];
+    for (const hex of colors) {
+      const chip = document.createElement("span");
+      chip.className = "palette-chip";
+      chip.style.backgroundColor = hex;
+      chip.title = hex;
+      wrap.appendChild(chip);
+    }
+  }
+
+  return wrap;
+}
+
+function showLoader() {
+  output.innerHTML = '<div class="loader-container is-visible"><span class="loader" aria-label="Laden"></span></div>';
+}
+
+
+/* ------------------------------------------------------------------------------------
+    INPUT, OUTPUT
     ------------------------------------------------------------------------------------ */
 async function submitUserPrompt(event) {
   try {
@@ -50,18 +118,13 @@ async function submitUserPrompt(event) {
     const sendSound = new Audio("/assets/sounds/SendSound.wav");
     sendSound.play();
 
-    const prompt = input.value;
+    const prompt = input.value.trim();
+    if (!prompt) return;
     if (await slashCommand(prompt)) return;
 
-    if (uploadedFloorPlanDataUrl && !cameraPreference) {
-      const askedCamera = window.prompt(
-        "Wo soll die Kamera basierend auf dem Grundriss stehen?",
-        "Auf eigenhöhe in der unteren rechten Ecke mit Blick in die Mitte des Raumes",
-      );
-      cameraPreference = (askedCamera || "").trim();
-    }
-
     input.value = "";
+
+    chatHistory.push({ role: "user", content: prompt });
     showLoader();
 
     const response = await fetch(API_CHAT, {
@@ -69,115 +132,63 @@ async function submitUserPrompt(event) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         messages: [{ role: "user", content: prompt }],
-        floorPlanImageDataUrl: uploadedFloorPlanDataUrl || undefined,
-        floorPlanFileName: uploadedFloorPlanName || undefined,
-        cameraPreference: cameraPreference || undefined,
+        uploadedImageDataUrl: uploadedImageDataUrl || undefined,
+        uploadedImageFileName: uploadedImageName || undefined,
       }),
     });
+
+    // Clear uploaded image after sending
+    uploadedImageDataUrl = "";
+    uploadedImageName = "";
+    if (floorPlanInput) floorPlanInput.value = "";
+    if (floorPlanPreview) {
+      floorPlanPreview.removeAttribute("src");
+      floorPlanPreview.classList.remove("is-visible");
+    }
 
     const responseJSON = await response.json();
 
     if (responseJSON.error) {
       const serverMessage = [responseJSON.error, responseJSON.message].filter(Boolean).join(": ");
-      console.error("/api/chat failed", {
-        status: response.status,
-        error: responseJSON.error,
-        message: responseJSON.message,
-        type: responseJSON.type,
-        details: responseJSON.details,
-      });
-      displayError(serverMessage || responseJSON.error);
+      chatHistory.push({ role: "assistant", content: serverMessage || "Unbekannter Fehler", error: true });
+      renderAllMessages();
+      new Audio("/assets/sounds/ReceiveSound.wav").play();
       return;
     }
 
-    const text =
-      typeof responseJSON.text === "string"
-        ? responseJSON.text
-        : responseJSON.choices?.[0]?.message?.content || "";
-
+    const text = typeof responseJSON.text === "string"
+      ? responseJSON.text
+      : responseJSON.choices?.[0]?.message?.content || "";
     const images = Array.isArray(responseJSON.images) ? responseJSON.images : [];
     const palettes = Array.isArray(responseJSON.palettes) ? responseJSON.palettes : [];
 
-    renderOutput(text, images, palettes);
+    chatHistory.push({ role: "assistant", content: text, images, palettes });
+    renderAllMessages();
+    new Audio("/assets/sounds/ReceiveSound.wav").play();
   } catch (error) {
-    displayError(error);
+    chatHistory.push({ role: "assistant", content: error?.message || String(error), error: true });
+    renderAllMessages();
   }
-}
-
-// Funktionen zum Rendern der KI-Antwort, der Bilder und der Farbpaletten
-function renderOutput(text, images = [], palettes = []) {
-  output.innerHTML = "";
-
-  const receiveSound = new Audio("/assets/sounds/ReceiveSound.wav");
-  receiveSound.play();
-
-  const textNode = document.createElement("p");
-  textNode.textContent = text || "";
-  output.appendChild(textNode);
-
-  for (const image of images) {
-    const src = image?.dataUrl || image?.url;
-    if (!src) continue;
-
-    const imageNode = document.createElement("img");
-    imageNode.src = src;
-    imageNode.alt = "Generiertes Raumdesign";
-    imageNode.loading = "lazy";
-    output.appendChild(imageNode);
-  }
-
-  renderPalettes(palettes);
-}
-
-function renderPalettes(palettes = []) {
-  if (!Array.isArray(palettes) || palettes.length === 0) return;
-  const isSinglePalette = palettes.length === 1;
-
-  const paletteWrap = document.createElement("div");
-  paletteWrap.className = "palette-wrap";
-
-  for (const palette of palettes) {
-    const row = document.createElement("div");
-    row.className = "palette-row";
-
-    const chips = document.createElement("div");
-    chips.className = "palette-chips";
-
-    const colors = Array.isArray(palette.colors) ? palette.colors : [];
-    for (const hex of colors) {
-      const chip = document.createElement("span");
-      chip.className = "palette-chip";
-      chip.style.backgroundColor = hex;
-      chip.title = hex;
-      chips.appendChild(chip);
-    }
-
-    row.appendChild(chips);
-    paletteWrap.appendChild(row);
-  }
-
-  output.appendChild(paletteWrap);
 }
 
 
 /* ------------------------------------------------------------------------------------
     WEITERES CHAT HANDLING
     ------------------------------------------------------------------------------------ */
-// Funktion zur Erkennung von Slash-Befehlen
 async function slashCommand(userPrompt) {
   const trimmedPrompt = userPrompt.trim();
 
   if (trimmedPrompt.startsWith("/")) {
     const firstSpaceIndex = trimmedPrompt.indexOf(" ");
     const cmd = firstSpaceIndex === -1 ? trimmedPrompt : trimmedPrompt.substring(0, firstSpaceIndex);
-
     const commandHandler = commands[cmd];
 
     if (commandHandler) {
       await commandHandler();
     } else {
       input.value = "";
-      output.textContent = "Error: Slash-Befehl unbekannt!";
+      chatHistory.push({ role: "assistant", content: `Unbekannter Slash-Befehl: ${cmd}`, error: true });
+      renderAllMessages();
     }
     return true;
   }
@@ -185,30 +196,11 @@ async function slashCommand(userPrompt) {
   return false;
 }
 
-function displayError(error, fallback = "Unbekannter Fehler") {
-  let message = fallback;
-
-  if (error) {
-    if (typeof error === "string") {
-      message = error;
-    } else if (typeof error.message === "string") {
-      message = error.message;
-    } else {
-      message = JSON.stringify(error);
-    }
-  }
-
-  output.textContent = `Error: ${message}`;
-}
-
 
 /* ------------------------------------------------------------------------------------
     ACTION-BUTTONS
     ------------------------------------------------------------------------------------ */
-// Funktionen für Action-Fan-Buttons
 async function resetConversation() {
-  output.textContent = "Konversation wird zurückgesetzt...";
-
   try {
     const response = await fetch(API_CHAT_RESET, {
       method: "POST",
@@ -219,14 +211,15 @@ async function resetConversation() {
     const responseJSON = await response.json();
 
     if (!response.ok || !responseJSON.success) {
-      displayError(responseJSON.error, "Reset fehlgeschlagen");
+      chatHistory.push({ role: "assistant", content: responseJSON.error || "Reset fehlgeschlagen", error: true });
+      renderAllMessages();
       return;
     }
 
     input.value = "";
-    uploadedFloorPlanDataUrl = "";
-    uploadedFloorPlanName = "";
-    cameraPreference = "";
+    uploadedImageDataUrl = "";
+    uploadedImageName = "";
+    chatHistory = [];
 
     if (floorPlanInput) floorPlanInput.value = "";
     if (floorPlanPreview) {
@@ -234,9 +227,10 @@ async function resetConversation() {
       floorPlanPreview.classList.remove("is-visible");
     }
 
-    output.textContent = "Konversation zurückgesetzt.";
+    renderAllMessages();
   } catch (error) {
-    displayError(error);
+    chatHistory.push({ role: "assistant", content: error?.message || String(error), error: true });
+    renderAllMessages();
   }
 }
 
@@ -292,32 +286,32 @@ async function toggleImageGallery() {
   }
 }
 
-// Funktionen zum Handling des Grundriss-Uploads und der Umwandlung in Data URLs
 async function handleFloorPlanUpload(event) {
   const file = event?.target?.files?.[0];
   if (!file) return;
 
   try {
-    uploadedFloorPlanDataUrl = await fileToDataUrl(file);
-    uploadedFloorPlanName = file.name;
-    cameraPreference = "";
+    uploadedImageDataUrl = await fileToDataUrl(file);
+    uploadedImageName = file.name;
 
     if (floorPlanPreview) {
-      floorPlanPreview.src = uploadedFloorPlanDataUrl;
+      floorPlanPreview.src = uploadedImageDataUrl;
       floorPlanPreview.classList.add("is-visible");
     }
 
-    output.textContent = `Grundriss geladen: ${uploadedFloorPlanName}`;
+    chatHistory.push({ role: "assistant", content: `Bild geladen: ${uploadedImageName}` });
+    renderAllMessages();
   } catch (error) {
-    uploadedFloorPlanDataUrl = "";
-    uploadedFloorPlanName = "";
+    uploadedImageDataUrl = "";
+    uploadedImageName = "";
 
     if (floorPlanPreview) {
       floorPlanPreview.removeAttribute("src");
       floorPlanPreview.classList.remove("is-visible");
     }
 
-    displayError(error, "Upload fehlgeschlagen");
+    chatHistory.push({ role: "assistant", content: error?.message || "Upload fehlgeschlagen", error: true });
+    renderAllMessages();
   }
 }
 
@@ -332,14 +326,8 @@ async function fileToDataUrl(file) {
 
 
 /* ------------------------------------------------------------------------------------
-    lOADER UND INTERAKTIVER HINTERGRUND
+    INTERAKTIVER HINTERGRUND
     ------------------------------------------------------------------------------------ */
-// Funktion zum Anzeigen des Ladeindikators
-function showLoader() {
-  output.innerHTML = LOADER_HTML;
-}
-
-// Interaktiver Hintergrund-Effekt
 document.addEventListener("DOMContentLoaded", () => {
   const interBubble = document.querySelector(".interactive");
   if (!interBubble) return;
@@ -353,9 +341,7 @@ document.addEventListener("DOMContentLoaded", () => {
     curX += (tgX - curX) / 20;
     curY += (tgY - curY) / 20;
     interBubble.style.transform = `translate(${Math.round(curX)}px, ${Math.round(curY)}px)`;
-    requestAnimationFrame(() => {
-      move();
-    });
+    requestAnimationFrame(move);
   }
 
   window.addEventListener("mousemove", (event) => {

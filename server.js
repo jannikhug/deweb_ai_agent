@@ -2,7 +2,7 @@ import OpenAI from "openai";
 import path from "path";
 import * as fs from "fs/promises";
 import { tools } from "./tools/index.js";
-import { runFloorPlanPipeline, resolveImageForPalette, getToolByName, parseJsonSafe } from "./pipeline.js";
+import { classifyImage, resolveImageForPalette, getToolByName, parseJsonSafe } from "./pipeline.js";
 
 const CLIENT_DIR = path.resolve(import.meta.dir, "public");
 
@@ -29,17 +29,39 @@ const SYSTEM_PROMPT = `Du bist ein professioneller KI-Innenarchitekt. Du hilfst 
 - **detect_openings** - Erkennt Türen und Fenster aus einem Grundrissbild.
 - **camera_view_planner** - Plant eine geeignete Kameraperspektive für die Visualisierung.
 - **layout_constraint_checker** - Leitet Möblierungs-Regeln aus Raumdaten ab (z.B. «Sofa nicht vor die Tür»).
+- **style_analyzer** - Analysiert ein Raumfoto und extrahiert Stil, Materialien, Farben und eine DALL-E-Beschreibung.
 - **generate_room_image** - Generiert eine fotorealistische Raumvisualisierung mit DALL-E.
 - **extract_image_palette** - Extrahiert die Farbpalette aus einem generierten Bild.
 
 ## Wann du welches Tool einsetzt
 
-**Mit Grundriss (vom Server bereits verarbeitet):** Die Pipeline läuft automatisch ab - du bekommst Dimensionen, Öffnungen, Kameraplan, Constraints, Bild und Palette bereits als Kontext. Fasse die Ergebnisse für den Nutzer verständlich zusammen.
+### Wenn der Nutzer ein Bild hochlädt
 
-**Ohne Grundriss - Visualisierungswunsch:** Rufe generate_room_image auf. Frage vorher nach Raumtyp, Stil und Farbwunsch, falls diese fehlen.
+Das Bild ist in der User-Message sichtbar. Schau es dir an und entscheide selbst:
 
+**→ Es ist ein Grundriss** (technische Zeichnung von oben, Wandlinien, schwarz-weiss oder vereinfacht):
+Rufe die Tools einzeln nacheinander auf - der Output jedes Tools ist Input für den nächsten:
+1. detect_room_dimensions(image_url="UPLOADED_IMAGE")
+2. detect_openings(image_url="UPLOADED_IMAGE", room_context=<JSON aus Schritt 1>)
+3. camera_view_planner(image_url="UPLOADED_IMAGE", floor_plan_summary=<JSON aus Schritt 1+2 kombiniert>, user_intent=<Nutzerwunsch>)
+4. layout_constraint_checker(room_dimensions=<JSON aus 1>, openings=<JSON aus 2>, camera_plan=<JSON aus 3>, user_intent=<Nutzerwunsch>)
+5. generate_room_image(description=<englische Beschreibung aus allen JSONs + Nutzerwunsch, inkl. Dimensionen, Öffnungen, Kamera, Constraints>)
+6. extract_image_palette(image_url=<URL des generierten Bildes aus Schritt 5>)
+
+**→ Es ist ein Raumfoto** (echtes oder fotorealistisches Bild eines eingerichteten Raumes):
+1. style_analyzer(image_url="UPLOADED_IMAGE")
+2. generate_room_image(description=<dalle_description aus Schritt 1, ergänzt um Nutzerwunsch auf Englisch>)
+3. extract_image_palette(image_url=<URL des generierten Bildes aus Schritt 2>)
+
+**Wichtig:**
+- Verwende immer den Wert "UPLOADED_IMAGE" als image_url für das hochgeladene Bild.
+- Rufe Tools einzeln nacheinander auf, nicht parallel - jeder Tool-Output fliesst in den nächsten ein.
+- Nach der Tool-Kette: Fasse die Ergebnisse für den Nutzer verständlich zusammen.
+
+### Ohne Bild
+
+**Visualisierungswunsch:** Rufe generate_room_image auf. Frage vorher nach Raumtyp, Stil und Farbwunsch, falls diese fehlen.
 **Farbberatung zu einem vorhandenen Bild:** Rufe extract_image_palette auf und erkläre die Palette.
-
 **Allgemeine Einrichtungsfragen:** Beantworte direkt aus deinem Fachwissen - kein Tool nötig.
 
 ## Verhalten
@@ -55,11 +77,17 @@ let conversation = [];
 /* ------------------------------------------------------------------------------------
     TOOLS AUSFÜHREN
     ------------------------------------------------------------------------------------ */
-async function executeToolCalls(toolCalls) {
+async function executeToolCalls(toolCalls, { uploadedImageDataUrl = "" } = {}) {
   const results = [];
   for (const toolCall of toolCalls) {
     const toolName = toolCall.function.name;
     const toolInput = JSON.parse(toolCall.function.arguments);
+
+    // Resolve UPLOADED_IMAGE token to the actual data URL
+    if (uploadedImageDataUrl && toolInput.image_url === "UPLOADED_IMAGE") {
+      toolInput.image_url = uploadedImageDataUrl;
+    }
+
     const tool = tools.find((t) => t.function.name === toolName);
 
     let content;
@@ -110,7 +138,6 @@ function extractImagesFromToolResults(toolResults) {
 
   for (const result of toolResults) {
     const content = String(result?.content || "");
-
     const parsed = parseJsonSafe(content, null);
     if (!parsed || typeof parsed !== "object") continue;
 
@@ -124,7 +151,6 @@ function extractImagesFromToolResults(toolResults) {
     }
   }
 
-  // Deduplizieren über die effektive Source
   const seen = new Set();
   return images.filter((img) => {
     const key = img.dataUrl || img.url;
@@ -132,6 +158,23 @@ function extractImagesFromToolResults(toolResults) {
     seen.add(key);
     return true;
   });
+}
+
+function extractPalettesFromToolResults(toolResults) {
+  const palettes = [];
+  for (const result of toolResults) {
+    const content = String(result?.content || "");
+    const parsed = parseJsonSafe(content, null);
+    if (!parsed || typeof parsed !== "object") continue;
+    if (!Array.isArray(parsed.colors)) continue;
+    const colors = parsed.colors
+      .map((e) => (typeof e === "string" ? e : e?.hex))
+      .filter((h) => typeof h === "string");
+    if (colors.length > 0) {
+      palettes.push({ variant: palettes.length + 1, colors, summary: parsed.summary || "" });
+    }
+  }
+  return palettes;
 }
 
 
@@ -155,62 +198,43 @@ async function handleChat(req) {
   }
 
   const userMessage = body.message || body.messages?.[body.messages.length - 1]?.content;
-  const floorPlanImageDataUrl = typeof body.floorPlanImageDataUrl === "string" ? body.floorPlanImageDataUrl : "";
-  const floorPlanFileName = typeof body.floorPlanFileName === "string" ? body.floorPlanFileName : "";
-  const cameraPreference = typeof body.cameraPreference === "string" ? body.cameraPreference : "";
+  const uploadedImageDataUrl = typeof body.uploadedImageDataUrl === "string" ? body.uploadedImageDataUrl : "";
+  const uploadedImageFileName = typeof body.uploadedImageFileName === "string" ? body.uploadedImageFileName : "";
 
   if (!userMessage) {
     return jsonResponse({ error: "No message provided" }, 400);
   }
 
-  if (floorPlanImageDataUrl) {
+  // When an image is uploaded: classify it server-side (vision call), then inject the
+  // result as a text hint for the Copilot orchestrator. The Copilot API does not support
+  // base64 data URLs in multimodal messages, so we never pass the image directly to it.
+  // The "UPLOADED_IMAGE" token in tool calls is resolved to the actual data URL in executeToolCalls.
+  let currentUserContent = userMessage;
+  if (uploadedImageDataUrl) {
+    let imageTypeHint;
     try {
-      const pipelineResult = await runFloorPlanPipeline({
-        userMessage,
-        floorPlanImageDataUrl,
-        floorPlanFileName,
-        cameraPreference,
-      });
-
-      conversation.push({ role: "user", content: userMessage });
-      conversation.push({ role: "assistant", content: pipelineResult.text });
-
-      return jsonResponse({
-        text: pipelineResult.text,
-        images: pipelineResult.images,
-        palettes: pipelineResult.palettes,
-        floor_plan_analysis: pipelineResult.analysis,
-        choices: [
-          {
-            finish_reason: "stop",
-            message: {
-              role: "assistant",
-              content: pipelineResult.text,
-            },
-          },
-        ],
-      });
-    } catch (pipelineError) {
-      console.log("\n❌❌❌ FLOOR PLAN PIPELINE FAILED ❌❌❌");
-      console.log("Error Name:", pipelineError?.name);
-      console.log("Error Message:", pipelineError?.message);
-      console.log("Error Stack:", pipelineError?.stack);
-      
-      const errorDetails = {
-        error: "Grundriss-Pipeline fehlgeschlagen",
-        message: pipelineError?.message || String(pipelineError),
-        type: pipelineError?.name,
-      };
-      
-      return jsonResponse(errorDetails, 500);
+      const classification = await classifyImage(uploadedImageDataUrl);
+      imageTypeHint = classification.type === "room_photo"
+        ? "[Hochgeladenes Bild: RAUMFOTO erkannt. Starte Raumfoto-Workflow: style_analyzer → generate_room_image → extract_image_palette.]"
+        : "[Hochgeladenes Bild: GRUNDRISS erkannt. Starte Grundriss-Workflow: detect_room_dimensions → detect_openings → camera_view_planner → layout_constraint_checker → generate_room_image → extract_image_palette.]";
+    } catch {
+      imageTypeHint = "[Hochgeladenes Bild verfügbar. Analysiere es mit den passenden Tools.]";
     }
+    currentUserContent = `${userMessage}\n\n${imageTypeHint}\n[Für Tool-Calls: image_url="UPLOADED_IMAGE"]`;
+    if (uploadedImageFileName) currentUserContent += `\n[Dateiname: ${uploadedImageFileName}]`;
   }
 
   conversation.push({ role: "user", content: userMessage });
-  const messagesWithSystem = [{ role: "system", content: SYSTEM_PROMPT }, ...conversation];
+
+  const messagesWithSystem = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...conversation.slice(0, -1),
+    { role: "user", content: currentUserContent }, // may include image-type hint
+  ];
 
   let responseJSON;
-  let lastToolResults = [];
+  let allToolResults = [];
+
   try {
     responseJSON = await openai.chat.completions.create({
       model: GITHUB_COPILOT_MODEL,
@@ -228,8 +252,8 @@ async function handleChat(req) {
         tool_calls: extracted.toolCalls,
       });
 
-      const toolResults = await executeToolCalls(extracted.toolCalls);
-      lastToolResults = toolResults;
+      const toolResults = await executeToolCalls(extracted.toolCalls, { uploadedImageDataUrl });
+      allToolResults.push(...toolResults);
       conversation.push(...toolResults);
 
       const updatedMessages = [{ role: "system", content: SYSTEM_PROMPT }, ...conversation];
@@ -255,43 +279,46 @@ async function handleChat(req) {
   }
 
   const finalMessage = extractAssistantMessage(responseJSON);
-  const images = extractImagesFromToolResults(lastToolResults);
+  const images = extractImagesFromToolResults(allToolResults);
   const normalizedContent = finalMessage.content || "";
 
-  const palettes = [];
-  const extractPaletteTool = getToolByName("extract_image_palette");
-  if (extractPaletteTool && images.length > 0) {
-    for (let i = 0; i < images.length; i++) {
-      try {
-        const imageSource = await resolveImageForPalette(images[i]);
-        if (!imageSource) continue;
-        const paletteRaw = await extractPaletteTool.execute({ image_url: imageSource });
-        const paletteParsed = parseJsonSafe(paletteRaw, { colors: [] });
-        const colors = Array.isArray(paletteParsed.colors)
-          ? paletteParsed.colors
-              .map((entry) => (typeof entry === "string" ? entry : entry?.hex))
-              .filter((hex) => typeof hex === "string")
-          : [];
-        palettes.push({
-          variant: i + 1,
-          colors,
-          summary: typeof paletteParsed.summary === "string" ? paletteParsed.summary : "",
-        });
-      } catch (err) {
-        console.warn("⚠ extract_image_palette (auto) fehlgeschlagen:", err.message);
+  // Use palettes extracted from tool results (LLM called extract_image_palette).
+  // Fall back to auto-extraction if the LLM skipped that step.
+  let palettes = extractPalettesFromToolResults(allToolResults);
+  if (palettes.length === 0 && images.length > 0) {
+    const extractPaletteTool = getToolByName("extract_image_palette");
+    if (extractPaletteTool) {
+      for (let i = 0; i < images.length; i++) {
+        try {
+          const imageSource = await resolveImageForPalette(images[i]);
+          if (!imageSource) continue;
+          const paletteRaw = await extractPaletteTool.execute({ image_url: imageSource });
+          const paletteParsed = parseJsonSafe(paletteRaw, { colors: [] });
+          const colors = Array.isArray(paletteParsed.colors)
+            ? paletteParsed.colors
+                .map((entry) => (typeof entry === "string" ? entry : entry?.hex))
+                .filter((hex) => typeof hex === "string")
+            : [];
+          palettes.push({
+            variant: i + 1,
+            colors,
+            summary: typeof paletteParsed.summary === "string" ? paletteParsed.summary : "",
+          });
+        } catch (err) {
+          console.warn("⚠ extract_image_palette (auto) fehlgeschlagen:", err.message);
+        }
       }
     }
   }
 
   conversation.push({ role: "assistant", content: normalizedContent });
 
-  // Antwort normalisieren, damit der Client den vollständigen Text immer in choices[0] findet
   return jsonResponse({
     ...responseJSON,
     text: normalizedContent,
     images,
     palettes,
-    tool_results: lastToolResults,
+    tool_results: allToolResults,
     choices: [
       {
         ...responseJSON.choices?.[0],
@@ -330,7 +357,6 @@ async function handleStaticFiles(req) {
   const fileName = url.pathname === "/" ? "/index.html" : url.pathname;
   const filePath = path.resolve(CLIENT_DIR, "." + fileName);
 
-  // Path-Traversal-Schutz: Pfad muss innerhalb CLIENT_DIR bleiben
   if (!filePath.startsWith(CLIENT_DIR)) {
     return jsonResponse({ error: "Forbidden" }, 403);
   }

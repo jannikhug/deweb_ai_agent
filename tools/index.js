@@ -4,6 +4,7 @@ import detectOpenings from "./detect_openings.js";
 import cameraViewPlanner from "./camera_view_planner.js";
 import layoutConstraintChecker from "./layout_constraint_checker.js";
 import extractImagePalette from "./extract_image_palette.js";
+import styleAnalyzer from "./style_analyzer.js";
 
 export const tools = [
 	generateRoomImage,
@@ -12,6 +13,7 @@ export const tools = [
 	cameraViewPlanner,
 	layoutConstraintChecker,
 	extractImagePalette,
+	styleAnalyzer,
 ];
 export {
 	generateRoomImage,
@@ -20,4 +22,5 @@ export {
 	cameraViewPlanner,
 	layoutConstraintChecker,
 	extractImagePalette,
+	styleAnalyzer,
 };
