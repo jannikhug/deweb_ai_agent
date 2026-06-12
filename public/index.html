@@ -22,24 +22,27 @@
                     <input id="input" type="text" placeholder="Nachricht..." />
                     <button class="submit-button" type="submit" aria-label="Send"><span class="material-icons">send</span></button>
                 </form>
-                <div class="action-fan" aria-label="Weitere Aktionen">
-                    <button class="action-button action-fan-trigger" type="button" aria-label="Open actions"><span class="material-icons">more_horiz</span></button>
-                    <div class="action-fan-items">
-                        <button class="action-button action-fan-item" id="reset-button" type="button" aria-label="Reset"><span class="material-icons">refresh</span></button>
-                        <label class="action-button action-fan-item file-upload-button" aria-label="Upload">
-                            <span class="material-icons">file_upload</span>
-                            <input id="upload-floor-plan-input" class="upload-input" type="file" accept="image/png,image/jpeg,image/webp" />
-                            <img id="floor-plan-preview" class="floor-plan-preview" alt="Grundriss Vorschau" />
-                        </label>
-                        <button class="action-button action-fan-item" id="open-images-button" type="button" aria-label="Fotos anzeigen"><span class="material-icons">photo_library</span></button>
-                        <button class="action-button action-fan-item" id="music-toggle-button" type="button" aria-label="Musik ein/aus"><span class="material-icons">music_note</span></button>
-                    </div>
-                </div>
             </div>
+        </div>
+
+        <div class="action-container" aria-label="Aktionen">
+            <button class="action-button" id="open-images-button" type="button" aria-label="Fotos anzeigen"><span class="material-icons">photo_library</span></button>
+            <button class="action-button" id="furniture-search-button" type="button" aria-label="Möbel suchen"><span class="material-icons">shopping_bag</span></button>
+            <button class="action-button" id="music-toggle-button" type="button" aria-label="Musik ein/aus"><span class="material-icons">music_note</span></button>
+            <button class="action-button" id="reset-button" type="button" aria-label="Reset"><span class="material-icons">refresh</span></button>
+            <label class="action-button file-upload-button" aria-label="Upload">
+                <span class="material-icons">file_upload</span>
+                <input id="upload-floor-plan-input" class="upload-input" type="file" accept="image/png,image/jpeg,image/webp" />
+            </label>
+            <img id="floor-plan-preview" class="floor-plan-preview" alt="Grundriss Vorschau" />
         </div>
 
         <div id="image-gallery" class="image-gallery" aria-label="Generierte Bilder">
             <div id="image-gallery-list" class="image-gallery-list"></div>
+        </div>
+
+        <div id="furniture-panel" class="furniture-panel" aria-label="Möbelempfehlungen">
+            <div id="furniture-list" class="furniture-list"></div>
         </div>
 
         <div class="noise"></div>

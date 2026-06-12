@@ -44,6 +44,7 @@ const SYSTEM_PROMPT = `Du bist ein professioneller KI-Innenarchitekt. Du hilfst 
 - **style_analyzer** - Analysiert ein Raumfoto und extrahiert Stil, Materialien, Farben und eine GPT Image 1.5-Beschreibung.
 - **generate_room_image** - Generiert eine fotorealistische Raumvisualisierung mit GPT Image 1.5.
 - **extract_image_palette** - Extrahiert die Farbpalette aus einem generierten Bild.
+- **search_furniture** - Sucht passende Möbel zum Kaufen basierend auf Stil, Farben und Materialien. Aufrufen nach einer Visualisierung/Stilanalyse oder wenn der Nutzer explizit nach Möbeln zum Kaufen fragt.
 
 ## Wann du welches Tool einsetzt
 
@@ -59,11 +60,13 @@ Rufe die Tools einzeln nacheinander auf - der Output jedes Tools ist Input für 
 4. layout_constraint_checker(room_dimensions=<JSON aus 1>, openings=<JSON aus 2>, camera_plan=<JSON aus 3>, user_intent=<Nutzerwunsch>)
 5. generate_room_image(description=<englische Beschreibung aus allen JSONs + Nutzerwunsch, inkl. Dimensionen, Öffnungen, Kamera, Constraints>)
 6. extract_image_palette(image_url=<URL des generierten Bildes aus Schritt 5>)
+7. search_furniture(style=<Stil aus camera_view_planner/Nutzerwunsch>, room_type=<Raumtyp>, colors=<Farben aus Palette>, search_queries=[<3 konkrete deutsche Suchbegriffe>])
 
 **→ Es ist ein Raumfoto** (echtes oder fotorealistisches Bild eines eingerichteten Raumes):
 1. style_analyzer(image_url="UPLOADED_IMAGE")
 2. generate_room_image(description=<dalle_description aus Schritt 1, ergänzt um Nutzerwunsch auf Englisch>)
 3. extract_image_palette(image_url=<URL des generierten Bildes aus Schritt 2>)
+4. search_furniture(style=<style_name aus Schritt 1>, room_type=<Raumtyp>, colors=<Farben aus Schritt 1>, materials=<materials aus Schritt 1>, search_queries=[<3 konkrete deutsche Suchbegriffe>])
 
 **Wichtig:**
 - Verwende immer den Wert "UPLOADED_IMAGE" als image_url für das hochgeladene Bild.
@@ -74,6 +77,7 @@ Rufe die Tools einzeln nacheinander auf - der Output jedes Tools ist Input für 
 
 **Visualisierungswunsch:** Rufe generate_room_image auf. Frage vorher nach Raumtyp, Stil und Farbwunsch, falls diese fehlen.
 **Farbberatung zu einem vorhandenen Bild:** Rufe extract_image_palette auf und erkläre die Palette.
+**Möbelkauf-Anfragen** («Welche Möbel passen dazu?», «Wo kann ich das kaufen?»): Rufe search_furniture direkt auf mit dem bekannten Stil und passenden Suchbegriffen.
 **Allgemeine Einrichtungsfragen:** Beantworte direkt aus deinem Fachwissen - kein Tool nötig.
 
 ## Verhalten
@@ -176,6 +180,18 @@ function extractImagesFromToolResults(toolResults) {
     seen.add(key);
     return true;
   });
+}
+
+function extractFurnitureFromToolResults(toolResults) {
+  for (const result of toolResults) {
+    const content = String(result?.content || "");
+    const parsed = parseJsonSafe(content, null);
+    if (!parsed || typeof parsed !== "object") continue;
+    if (Array.isArray(parsed.furniture) && parsed.furniture.length > 0) {
+      return parsed.furniture;
+    }
+  }
+  return [];
 }
 
 function extractPalettesFromToolResults(toolResults) {
@@ -286,8 +302,8 @@ async function handleChat(req) {
     try {
       const classification = await classifyImage(uploadedImageDataUrl);
       imageTypeHint = classification.type === "room_photo"
-        ? "[Hochgeladenes Bild: RAUMFOTO erkannt. Starte Raumfoto-Workflow: style_analyzer → generate_room_image → extract_image_palette.]"
-        : "[Hochgeladenes Bild: GRUNDRISS erkannt. Starte Grundriss-Workflow: detect_room_dimensions → detect_openings → camera_view_planner → layout_constraint_checker → generate_room_image → extract_image_palette.]";
+        ? "[Hochgeladenes Bild: RAUMFOTO erkannt. Starte Raumfoto-Workflow: style_analyzer → generate_room_image → extract_image_palette → search_furniture.]"
+        : "[Hochgeladenes Bild: GRUNDRISS erkannt. Starte Grundriss-Workflow: detect_room_dimensions → detect_openings → camera_view_planner → layout_constraint_checker → generate_room_image → extract_image_palette → search_furniture.]";
     } catch {
       imageTypeHint = "[Hochgeladenes Bild verfügbar. Analysiere es mit den passenden Tools.]";
     }
@@ -351,6 +367,7 @@ async function handleChat(req) {
 
   const finalMessage = extractAssistantMessage(responseJSON);
   const images = extractImagesFromToolResults(allToolResults);
+  const furniture = extractFurnitureFromToolResults(allToolResults);
   const normalizedContent = finalMessage.content || "";
 
   // Use palettes extracted from tool results (LLM called extract_image_palette).
@@ -389,6 +406,7 @@ async function handleChat(req) {
     text: normalizedContent,
     images,
     palettes,
+    furniture,
     tool_results: allToolResults,
     choices: [
       {

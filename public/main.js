@@ -7,10 +7,21 @@ const input = document.querySelector("#input");
 const resetButton = document.querySelector("#reset-button");
 const floorPlanInput = document.querySelector("#upload-floor-plan-input");
 const floorPlanPreview = document.querySelector("#floor-plan-preview");
+const floorPlanLabel = document.querySelector(".file-upload-button");
 const openImagesButton = document.querySelector("#open-images-button");
 const imageGallery = document.querySelector("#image-gallery");
 const imageGalleryList = document.querySelector("#image-gallery-list");
 const musicToggleButton = document.querySelector("#music-toggle-button");
+const furnitureSearchButton = document.querySelector("#furniture-search-button");
+const furniturePanel = document.querySelector("#furniture-panel");
+const furnitureList = document.querySelector("#furniture-list");
+
+form.addEventListener("submit", submitUserPrompt);
+resetButton.addEventListener("click", resetConversation);
+floorPlanInput?.addEventListener("change", handleFloorPlanUpload);
+openImagesButton?.addEventListener("click", toggleImageGallery);
+musicToggleButton?.addEventListener("click", toggleBackgroundMusic);
+furnitureSearchButton?.addEventListener("click", toggleFurniturePanel);
 
 const backgroundMusic = new Audio("/assets/sounds/BackgroundSound.mp3");
 backgroundMusic.loop = true;
@@ -22,12 +33,7 @@ const WELCOME_MESSAGE = "Frage mich etwas, lass mich einen Raum gestalten oder b
 let chatHistory = [];
 let uploadedImageDataUrl = "";
 let uploadedImageName = "";
-
-form.addEventListener("submit", submitUserPrompt);
-resetButton.addEventListener("click", resetConversation);
-floorPlanInput?.addEventListener("change", handleFloorPlanUpload);
-openImagesButton?.addEventListener("click", toggleImageGallery);
-musicToggleButton?.addEventListener("click", toggleBackgroundMusic);
+let currentFurniture = [];
 
 const commands = {
   "/reset": resetConversation,
@@ -145,6 +151,7 @@ async function submitUserPrompt(event) {
       floorPlanPreview.removeAttribute("src");
       floorPlanPreview.classList.remove("is-visible");
     }
+    floorPlanLabel?.classList.remove("is-active");
 
     const responseJSON = await response.json();
 
@@ -161,13 +168,23 @@ async function submitUserPrompt(event) {
       : responseJSON.choices?.[0]?.message?.content || "";
     const images = Array.isArray(responseJSON.images) ? responseJSON.images : [];
     const palettes = Array.isArray(responseJSON.palettes) ? responseJSON.palettes : [];
+    const furniture = Array.isArray(responseJSON.furniture) ? responseJSON.furniture : [];
 
     chatHistory.push({ role: "assistant", content: text, images, palettes });
     renderAllMessages();
+
+    if (furniture.length > 0) {
+      currentFurniture = furniture;
+      furniturePanel?.classList.add("is-visible");
+      furnitureSearchButton?.classList.add("is-active");
+    }
+    renderFurnitureItems(currentFurniture);
+
     new Audio("/assets/sounds/ReceiveSound.wav").play();
   } catch (error) {
     chatHistory.push({ role: "assistant", content: error?.message || String(error), error: true });
     renderAllMessages();
+    renderFurnitureItems(currentFurniture);
   }
 }
 
@@ -220,12 +237,16 @@ async function resetConversation() {
     uploadedImageDataUrl = "";
     uploadedImageName = "";
     chatHistory = [];
+    currentFurniture = [];
+    furniturePanel?.classList.remove("is-visible");
+    furnitureSearchButton?.classList.remove("is-active");
 
     if (floorPlanInput) floorPlanInput.value = "";
     if (floorPlanPreview) {
       floorPlanPreview.removeAttribute("src");
       floorPlanPreview.classList.remove("is-visible");
     }
+    floorPlanLabel?.classList.remove("is-active");
 
     renderAllMessages();
   } catch (error) {
@@ -252,11 +273,13 @@ async function toggleImageGallery() {
 
   if (imageGallery.classList.contains("is-visible")) {
     imageGallery.classList.remove("is-visible");
+    openImagesButton?.classList.remove("is-active");
     return;
   }
 
   imageGalleryList.innerHTML = "";
   imageGallery.classList.add("is-visible");
+  openImagesButton?.classList.add("is-active");
 
   try {
     const response = await fetch("/api/images");
@@ -286,6 +309,124 @@ async function toggleImageGallery() {
   }
 }
 
+function toggleFurniturePanel() {
+  if (!furniturePanel) return;
+
+  if (furniturePanel.classList.contains("is-visible")) {
+    furniturePanel.classList.remove("is-visible");
+    furnitureSearchButton?.classList.remove("is-active");
+  } else {
+    furniturePanel.classList.add("is-visible");
+    furnitureSearchButton?.classList.add("is-active");
+    renderFurnitureItems(currentFurniture);
+  }
+}
+
+
+function renderFurnitureItems(items) {
+  if (!furnitureList) return;
+  furnitureList.innerHTML = "";
+
+  if (items.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "furniture-panel-empty";
+    empty.textContent = "Noch keine Möbel gesucht.";
+    furnitureList.appendChild(empty);
+    return;
+  }
+
+  for (const item of items) {
+    furnitureList.appendChild(createFurnitureCard(item));
+  }
+}
+
+function createFurnitureCard(item) {
+  const card = document.createElement("div");
+  card.className = "furniture-card";
+
+  if (item.image) {
+    const img = document.createElement("img");
+    img.className = "furniture-card-image";
+    img.src = item.image;
+    img.alt = item.name || "";
+    img.loading = "lazy";
+    img.onerror = () => img.remove();
+    card.appendChild(img);
+  }
+
+  const header = document.createElement("div");
+  header.className = "furniture-card-header";
+
+  const icon = document.createElement("span");
+  icon.className = "material-icons furniture-card-icon";
+  icon.textContent = item.category_icon || "shopping_bag";
+  header.appendChild(icon);
+
+  const name = document.createElement("div");
+  name.className = "furniture-card-name";
+  name.textContent = item.name || "";
+  header.appendChild(name);
+
+  card.appendChild(header);
+
+  const priceText = item.price || item.price_range || "";
+  const metaParts = [item.category, item.material, item.color].filter(Boolean);
+
+  if (metaParts.length > 0) {
+    const meta = document.createElement("div");
+    meta.className = "furniture-card-meta";
+    meta.textContent = metaParts.join(" · ");
+    card.appendChild(meta);
+  }
+
+  if (priceText) {
+    const price = document.createElement("div");
+    price.className = "furniture-card-price";
+    price.textContent = priceText;
+    card.appendChild(price);
+  }
+
+  if (item.description && !item.image) {
+    const desc = document.createElement("div");
+    desc.className = "furniture-card-desc";
+    desc.textContent = item.description;
+    card.appendChild(desc);
+  }
+
+  if (item.rating) {
+    const rating = document.createElement("div");
+    rating.className = "furniture-card-meta";
+    const stars = "★".repeat(Math.round(item.rating)) + "☆".repeat(5 - Math.round(item.rating));
+    rating.textContent = `${stars} (${item.ratingCount ?? ""})`;
+    card.appendChild(rating);
+  }
+
+  const footer = document.createElement("div");
+  footer.className = "furniture-card-footer";
+
+  const source = document.createElement("span");
+  source.className = "furniture-card-retailer";
+  source.textContent = item.source || item.retailer || "";
+  footer.appendChild(source);
+
+  if (item.url) {
+    const link = document.createElement("a");
+    link.className = "furniture-card-link";
+    link.href = item.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    const linkIcon = document.createElement("span");
+    linkIcon.className = "material-icons";
+    linkIcon.textContent = "open_in_new";
+    link.appendChild(linkIcon);
+    link.appendChild(document.createTextNode(" Ansehen"));
+    footer.appendChild(link);
+  }
+
+  card.appendChild(footer);
+  return card;
+}
+
 async function handleFloorPlanUpload(event) {
   const file = event?.target?.files?.[0];
   if (!file) return;
@@ -298,6 +439,7 @@ async function handleFloorPlanUpload(event) {
       floorPlanPreview.src = uploadedImageDataUrl;
       floorPlanPreview.classList.add("is-visible");
     }
+    floorPlanLabel?.classList.add("is-active");
 
     chatHistory.push({ role: "assistant", content: `Bild geladen: ${uploadedImageName}` });
     renderAllMessages();

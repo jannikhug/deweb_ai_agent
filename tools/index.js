@@ -5,6 +5,7 @@ import cameraViewPlanner from "./camera_view_planner.js";
 import layoutConstraintChecker from "./layout_constraint_checker.js";
 import extractImagePalette from "./extract_image_palette.js";
 import styleAnalyzer from "./style_analyzer.js";
+import searchFurniture from "./search_furniture.js";
 
 export const tools = [
 	generateRoomImage,
@@ -14,6 +15,7 @@ export const tools = [
 	layoutConstraintChecker,
 	extractImagePalette,
 	styleAnalyzer,
+	searchFurniture,
 ];
 export {
 	generateRoomImage,
@@ -23,4 +25,5 @@ export {
 	layoutConstraintChecker,
 	extractImagePalette,
 	styleAnalyzer,
+	searchFurniture,
 };
